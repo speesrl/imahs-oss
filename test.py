@@ -1,14 +1,13 @@
-from clients import REDIS
+import traceback
 
-a = REDIS(
-    client_name='test',
-    password='',
-    host='http://localhost:6379'
-)
-b = REDIS(
-    client_name='test',
-    password='',
-    host='http://localhost:6379'
-)
+def where_am_i():
+    stack = traceback.extract_stack()
+    filename, lineno, func, _ = stack[-2]
+    return func
 
-print(hex(id(a))==hex(id(b)))
+class A:
+    def __call__(self):
+        print(where_am_i())
+
+a = A()
+a()
