@@ -1,13 +1,21 @@
-import traceback
 
-def where_am_i():
-    stack = traceback.extract_stack()
-    filename, lineno, func, _ = stack[-2]
-    return func
+class Atomic:
+    def __init__(self, value, callback):
+        self.value = value
+        self.callback = callback
 
-class A:
+    def __call__(self, *args, **kwds):
+        self.callback(*args, **kwds)
+
+class Host:
+    def __init__(self):
+        self.atomic = Atomic(value=4567, callback=self.callback)
+
+    def callback(self, secondary):
+        print(self.atomic.value, secondary)
+
     def __call__(self):
-        print(where_am_i())
+        self.atomic(secondary="yay")
 
-a = A()
-a()
+host = Host()
+host() 

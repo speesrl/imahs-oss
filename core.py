@@ -1,14 +1,17 @@
+import os 
 import uuid
 import json
-import logging
-import asyncio
-import ollama
-import datetime
-import traceback
 import time 
 import base64
+import ollama
+import hashlib 
+import logging
+import asyncio
+import datetime
+import chromadb
 
-from clients import REDIS
+from clients import REDIS, Embedder, ReRanker
+from utils  import FilesLoader, moving_average, where_am_i
 
 class Customer:
     def __init__(self, *, channel, function, args, sleep=.1):
@@ -29,16 +32,6 @@ class Customer:
                         return result
                 except Exception as e:
                     logging.exception(e)
-
-
-def moving_average(avg, x, alpha=.1):
-    return alpha*x + (1-alpha)*avg
-
-
-def where_am_i():
-    stack = traceback.extract_stack()
-    _, _, func, _ = stack[-2]
-    return func
 
 class Provider:
     def __init__(self, *, channel, sleep=.1):
@@ -170,6 +163,105 @@ class ModelProvider(Provider):
             self.respond(result={'token': chunk.response}, replyto=replyto)
         self.respond(result={'toksec': int(toksec)}, replyto=replyto)
 
-    
 
+class RAGService:
+    def __init__(
+            self,
+            *,
+            root
+        ):
+        super().__init__()
+        self.root        = root
+        self.src         = os.path.abspath(os.path.join(self.root, "documents"))
+        self.uid         = hashlib.blake2b('root documents'.encode(), digest_size=16, usedforsecurity=False).hexdigest()
+        self.filesloader = FilesLoader()
+        self.client      = chromadb.HttpClient(host='chroma', port=8000, settings=chromadb.config.Settings(anonymized_telemetry=False))
+        self.embedder    = Embedder(url="http://infinity:7997", model="intfloat/multilingual-e5-large-instruct")
+        self.reranker    = ReRanker(url="http://infinity:7997", model="cross-encoder/mmarco-mMiniLMv2-L12-H384-v1")
+        if not os.path.exists(self.root):
+            logging.warning(f"root {self.root} does not exist")
+    async def list(self, replyto: str):
+        REDIS().lpush(replyto, json.dumps({'function': 'list', 'result': self.filesloader.list(self.src)}))
+    async def load(self):
+        if not os.path.exists(self.src):
+            logging.warning(f"source_directory {self.src} does not exist")
+            return
+        try:
+            collection = self.client.get_or_create_collection(f"{self.uid}_docs", embedding_function=self.embedder)
+            current = collection.get(
+                where={"archived": False},
+                include=['metadatas']
+            )
+            existing_files = list(set([metadata['checksum'] for metadata in current['metadatas']]))
+        except Exception as e:
+            logging.exception(e)
+            existing_files = []
+        documents = self.filesloader.load_all(self.src, existing_files=existing_files)
+        if documents:
+            collection = self.client.get_or_create_collection(f"{self.uid}_docs", embedding_function=self.embedder)
+            collection.add(
+                documents=[document.page_content for document in documents],
+                ids=[uuid.uuid4().hex for _ in range(len(documents))],
+                metadatas=[{**document.metadata, "archived": False} for document in documents]
+            )       
+    async def query(self, question, checksum: str, replyto):
+        result = []
+        try:
+            collection = self.client.get_or_create_collection(f"{self.uid}_docs", embedding_function=self.embedder)
+            response = collection.query(
+                query_texts=[question],
+                where={"archived": False}
+            )
+            try:
+                keeps = self.reranker(question, response["documents"][0])
+            except Exception as e:
+                logging.exception(e)
+                keeps = [*range(len(response["documents"][0]))]
+            ids, metas, docs = [response["ids"][0][idx] for idx in keeps], [response["metadatas"][0][idx] for idx in keeps], [response["documents"][0][idx] for idx in keeps]
+            
+            logging.info(f"debugging rag, question {question}, docs: {docs}")
+            for _id, meta, doc in zip(ids, metas, docs):
+                result.append({
+                    "id": _id,
+                    "content": doc,
+                    "metadata": meta
+                })
+            REDIS().lpush(replyto, json.dumps({'function': 'query', 'result': result, 'checksum': checksum}))
+        except Exception as e:
+            logging.exception(e)
+    async def memory(self, replyto, checksum: str = ''):
+        collection = self.client.get_or_create_collection(f"{self.uid}_docs", embedding_function=self.embedder)
+        where=[{"archived": False}]
+        if checksum:
+            where += [{'checksum': checksum}]
+        results = collection.get(
+            where={"$and": where} if len(where) > 1 else where[0]
+        )
+        final = {}
+        for _id, meta, doc in zip(results["ids"], results["metadatas"], results["documents"]):
+            if meta.get('checksum') in final:
+                final[meta.get('checksum')]['content'] += [doc]
+            else:
+                final[meta.get('checksum')] = {
+                    "id": _id,
+                    "content": [doc],
+                    "metadata": meta
+                }
+        REDIS().lpush(replyto, json.dumps({'function': 'memory', 'result': final}))
+    async def __call__(self):
+        await self.load()
+        while True:
+            await asyncio.sleep(.1)
+            data = REDIS().lpop('requests:rag')
+            if data is not None:
+                try:
+                    data = json.loads(data)
+                    function, args = data.get('function'), data.get('args')
+                    if function is None or args is None:
+                        continue
+                    assert isinstance(function, str) and isinstance(args, dict)
+                    assert hasattr(self, function) and callable(getattr(self, function)), f'unknown function: {function}'
+                    asyncio.create_task(getattr(self, function)(**args))
+                except Exception as e:
+                    logging.exception(e)
 
