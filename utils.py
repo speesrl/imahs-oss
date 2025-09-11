@@ -13,20 +13,32 @@ import threading
 import traceback
 from copy import copy
 from tqdm import tqdm
-from docx import Document
+
 from PIL import Image
 from typing import List
 from PIL.ExifTags import TAGS
 from functools import cache
-from PyPDF2 import PdfReader
-from openpyxl import load_workbook
+
 from dataclasses import dataclass
 from markdown_it import MarkdownIt
+
+@dataclass
+class FileUpload:
+    filename: str
+    file: str 
+    content_type: str
 
 class FileInfo:
     def __init__(self, path, fast=False):
         assert os.path.isfile(path), f'{path} is not a valid file'
         self.fast = fast
+        if not self.fast:
+            try:
+                from docx import Document
+                from PyPDF2 import PdfReader
+                from openpyxl import load_workbook
+            except ImportError as e:
+                logging.exception(e)
         self.magic = magic.Magic(mime=True)
         self.path = path
         self.allowed = [attr for attr in dir(self) if (not isinstance(getattr(self.__class__, attr, None), property) and callable(getattr(self, attr)))]

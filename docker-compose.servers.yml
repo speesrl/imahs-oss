@@ -17,27 +17,29 @@ services:
       - ./files/redis:/data
     ports:
       - "6379:6379"
-    networks:
-      - imahs-oss
-
   # python:3.13
   python:
     pull_policy: missing
     image: python:3.13
-  # imahs-oss
-  imahs-oss:
+  marker:
     depends_on:
       - python
     pull_policy: never
     restart: always
-    container_name: imahs-oss
-    image: imahs:oss
+    container_name: marker
+    image: marker
     build: 
       context: .
-      dockerfile: dockerfile
+      dockerfile: dockerfile.marker
+    ports:
+      - "8192:8192"
     volumes:
-      - ./files:/imahs-oss/files
       - ./files/cache/datalab:/root/.cache/datalab
-networks:
-  imahs-oss:
-    driver: bridge
+    runtime: nvidia
+    deploy:
+      mode: global
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              capabilities: [gpu]

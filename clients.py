@@ -2,7 +2,39 @@ import redis
 import logging
 import numpy as np
 from chromadb.api.types import Embeddings, Documents
-from utils import Singleton
+from utils import Singleton, FileUpload
+
+
+class MarkerClient:
+    def __init__(
+        self,
+        *,
+        url: str
+    ):
+        try:
+            import httpx
+        except ImportError:
+            raise ValueError(
+                "The httpx python package is not installed. Please install it with `pip install httpx`"
+            )
+        self.url = url
+        self._session = httpx.Client(timeout=300)
+    def __call__(
+            self, 
+            file: FileUpload
+        ) -> Embeddings:
+        response = self._session.post(
+            f"{self.url}/marker/upload",
+            data={
+                "force_ocr": True,
+                "paginate_output": False,
+                "output_format": "markdown"
+            },
+            files={
+                "file": (file.filename, file.file, file.content_type)
+            }
+        ).json()
+        return response
 
 class InfinityClient:
     def __init__(

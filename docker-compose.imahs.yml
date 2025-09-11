@@ -1,0 +1,23 @@
+services:
+  # python:3.13
+  python:
+    pull_policy: missing
+    image: python:3.13
+  # imahs-oss
+  imahs-oss:
+    depends_on:
+      - python
+    pull_policy: never
+    restart: always
+    container_name: imahs-oss
+    image: imahs:oss
+    build: 
+      context: .
+      dockerfile: dockerfile
+    environment:
+      - password=${password}
+    volumes:
+      - ./files:/imahs-oss/files
+networks:
+  imahs-oss:
+    driver: bridge

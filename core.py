@@ -164,7 +164,7 @@ class ModelProvider(Provider):
         self.respond(result={'toksec': int(toksec)}, replyto=replyto)
 
 
-class RAGService:
+class RAGProvider(Provider):
     def __init__(
             self,
             *,
@@ -248,20 +248,264 @@ class RAGService:
                     "metadata": meta
                 }
         REDIS().lpush(replyto, json.dumps({'function': 'memory', 'result': final}))
-    async def __call__(self):
-        await self.load()
-        while True:
-            await asyncio.sleep(.1)
-            data = REDIS().lpop('requests:rag')
-            if data is not None:
+
+class FileService:
+    def __init__(
+            self, 
+            *, root
+        ):
+        self.root    = root
+    async def upload(self, chatid: str, username, files: list, replyto: str, url: str, model: str, prompt: str = ''):
+        try:
+            converter = Converter()
+            for name in files:
                 try:
-                    data = json.loads(data)
-                    function, args = data.get('function'), data.get('args')
-                    if function is None or args is None:
-                        continue
-                    assert isinstance(function, str) and isinstance(args, dict)
-                    assert hasattr(self, function) and callable(getattr(self, function)), f'unknown function: {function}'
-                    asyncio.create_task(getattr(self, function)(**args))
+                    filename = secure_filename(name)
+                    try:
+                        mimetype, _ = mimetypes.guess_type(filename)
+                        mimetype = mimetype.replace("/", "-")
+                    except:
+                        mimetype = "unknown"
+                    if mimetype in converter.mappings:
+                        raw = base64.b64decode(files[name].encode('ascii'))
+                        converted = converter.convert(filename, raw)
+                        if converted:
+                            (content, metadata, checksum) = converted
+                            frontmatter = yaml.dump(metadata, default_flow_style=False)
+                            text        = f"---\n{frontmatter}---\n\n{content}"
+                            REDIS().lpush(f'requests:chat', json.dumps({
+                                'function': 'add', 'args': {
+                                        'chatid': chatid,  'username': username, 'replyto': replyto, 'docs': [
+                                            {
+                                                'text': text,
+                                                'author': username, 
+                                                'fileid': checksum, 
+                                                'metadata': {
+                                                    **metadata,
+                                                    'mimetype': mimetype,
+                                                }
+                                            }
+                                        ]
+                                    }
+                                })
+                            )
+                    else:
+                        logging.debug(f"debugging the filesystem mimetype: {mimetype}")
+                        REDIS().lpush(f"responses:chatid:{chatid}:llm", json.dumps({'function': 'filesystem', 'result': {'image': files[name]}}))
+                        REDIS().lpush('requests:llm',  json.dumps({'function': 'vlm',  'args': {'chatid': chatid, 'replyto': f"responses:chatid:{chatid}:llm", 'username': username, 'url': url, 'model': model, 'prompt': prompt, 'image': files[name]}}))
                 except Exception as e:
                     logging.exception(e)
+                    continue
+        except Exception as e:
+            logging.exception(e)
 
+
+class ChatService:
+    def userid(self, username: str):
+        return hashlib.blake2b(username.encode(), digest_size=16, usedforsecurity=False).hexdigest()
+    def __init__(
+            self
+        ):
+        super().__init__()
+        self.client = chromadb.HttpClient(host='chroma', port=8000, settings=chromadb.config.Settings(anonymized_telemetry=False))
+        self.embedder = Embedder(url="http://infinity:7997", model="intfloat/multilingual-e5-large-instruct")
+        self.reranker = ReRanker(url="http://infinity:7997", model="cross-encoder/mmarco-mMiniLMv2-L12-H384-v1")
+    async def update(self, username, chatid, title, replyto):
+        try:
+            collection = self.client.get_or_create_collection(f"{self.userid(username)}_chat", embedding_function=self.embedder)
+            result = collection.get(
+                where={"$and": [{"archived": False}, {'chatid': chatid}]},
+                include=["metadatas"]
+            )
+            for idx, meta in zip(result['ids'], result['metadatas']):
+                meta["title"] = title
+                collection.update(
+                    ids=[idx],
+                    metadatas=[meta]
+                )
+        except Exception as e:
+            logging.exception(e)
+    
+    async def add(self, username, chatid, docs: List[Dict[str, str]], replyto):
+        try:
+            collection = self.client.get_or_create_collection(f"{self.userid(username)}_chat", embedding_function=self.embedder)
+            for doc in docs:
+                if 'text' in doc:
+                    timestamp = datetime.datetime.now().isoformat()
+                    historical = {
+                        'text': doc['text'],
+                        "chatid": chatid,
+                        'username': username,
+                        'author': doc['author'],
+                        'timestamp': timestamp,
+                        'source': doc.get('metadata', {}).get('source', ''),
+                        'checksum': doc.get('metadata', {}).get('checksum', ''),
+                    }
+                    if 'imageid' in doc:
+                        metadata = {
+                            "chatid": chatid,
+                            'username': username,
+                            'author': doc['author'],
+                            'imageid': doc['imageid'],
+                            'timestamp': timestamp,
+                            'archived': False,
+                            **doc['metadata'],
+                        }
+                        historical['otherid'] = doc['imageid']
+                        collection.add(
+                            documents=[doc['text']],
+                            ids=[uuid.uuid4().hex],
+                            metadatas=[
+                                metadata
+                            ]
+                        )
+                    elif 'fileid' in doc:
+                        loader = ContentLoader(doc['text'])
+                        tmp = [d.page_content for d in loader.lazy_load()]
+                        metadata = {
+                            "chatid": chatid,
+                            'username': username,
+                            'author': doc['author'],
+                            'fileid': doc['fileid'],
+                            'timestamp': timestamp,
+                            'archived': False,
+                            **doc['metadata'],
+                            **loader.metadata
+                        }
+                        historical['otherid'] = doc['fileid']
+                        collection.add(
+                            documents=tmp,
+                            ids=[uuid.uuid4().hex for _ in range(len(tmp))],
+                            metadatas=[
+                                metadata
+                                for _ in range(len(tmp))
+                            ]
+                        )
+                    else:
+                        collection.add(
+                            documents=[doc['text']],
+                            ids=[uuid.uuid4().hex],
+                            metadatas=[
+                                {
+                                    "chatid": chatid,
+                                    'username': username,
+                                    'author': doc['author'],
+                                    'timestamp': timestamp,
+                                    'archived': False,
+                                    **doc.get('metadata', {})
+                                }
+                            ]
+                        )
+                        historical['otherid'] = ''
+                REDIS().lpush(replyto, json.dumps({'function': 'add', 'result': doc})) 
+                historical['msgid'] = hashlib.blake2b(json.dumps(historical).encode(), digest_size=16, usedforsecurity=False).hexdigest()
+                with MYSQL(service2ip('mariadb'), 3306, 'imahs', 'password', 'imahs') as sql:
+                    sql.session.execute(
+                        sql.insert(Chats).values(
+                            **historical
+                        )
+                    )
+        except Exception as e:
+            logging.exception(e)      
+    async def title(self, username, chatid: str):
+        try:
+            collection = self.client.get_or_create_collection(f"{self.userid(username)}_chat", embedding_function=self.embedder)
+            result = collection.get(
+                where={"$and": [{"archived": False}, {'chatid': chatid}]},
+                include=["metadatas"]
+            )
+            for meta in result['metadatas']:
+                return meta["title"]
+        except Exception as e:
+            logging.exception(e)
+    async def archive(self, username, chatid: str, replyto:str):
+        try:
+            collection = self.client.get_or_create_collection(f"{self.userid(username)}_chat", embedding_function=self.embedder)
+            result = collection.get(
+                where={"$and": [{"archived": False}, {'chatid': chatid}]},
+                include=["metadatas"]
+            )
+            for idx, meta in zip(result['ids'], result['metadatas']):
+                meta["archived"] = True
+                collection.update(
+                    ids=[idx],
+                    metadatas=[meta]
+                )
+        except Exception as e:
+            logging.exception(e)
+        REDIS().lpush(replyto, json.dumps({'function': 'archive', 'result': True}))
+    async def query(self, username, chatid: str, question, checksum: str, replyto):
+        res = {
+            'messages': [],
+            'title': await self.title(username, chatid)
+        }
+        try:
+            collection = self.client.get_or_create_collection(f"{self.userid(username)}_chat", embedding_function=self.embedder)
+            response = collection.query(
+                query_texts=[question],
+                where={"$and": [{"archived": False}, {'chatid': chatid}]},
+                n_results=40
+            )
+            try:
+                keeps = self.reranker(question, response["documents"][0], percentile=40, relevance=.001)
+            except Exception as e:
+                logging.exception(e)
+                keeps = [*range(len(response["documents"][0]))]
+            ids, metas, docs = [response["ids"][0][idx] for idx in keeps], [response["metadatas"][0][idx] for idx in keeps], [response["documents"][0][idx] for idx in keeps]
+            for _id, meta, doc in zip(ids, metas, docs):
+                res['messages'].append({
+                    "id": _id,
+                    "content": doc,
+                    "timestamp": meta["timestamp"]
+                })
+        except Exception as e:
+            logging.exception(e)
+        REDIS().lpush(replyto, json.dumps({'function': 'query', 'result': res, 'checksum': checksum}))
+    async def _history(self, username, chatid: str, replyto):
+        history = {}
+        try:
+            collection = self.client.get_or_create_collection(f"{self.userid(username)}_chat", embedding_function=self.embedder)
+            result = collection.get(
+                where={"$and": [{"archived": False}, {'chatid': chatid}]}
+            )
+            history = {'title': await self.title(username, chatid), 'messages': {}}
+            for _id, meta, doc in zip(result["ids"], result["metadatas"], result["documents"]):
+                if 'fileid' in meta:
+                    history['messages'][meta['fileid']] = {
+                        "id": _id,
+                        "content": doc,
+                        "metadata": meta
+                    }
+                else:
+                    history['messages'][_id] = {
+                        "id": _id,
+                        "content": doc,
+                        "metadata": meta
+                    }
+            history['messages'] = [*history['messages'].values()]
+        except Exception as e:
+            logging.exception(e)
+        return history
+    async def history(self, username, chatid: str, replyto):
+        res = await self._history(username, chatid, replyto)
+        REDIS().lpush(replyto, json.dumps({'function': 'history', 'result': res}))
+    async def export(self, username, chatid: str, replyto):
+        res = await self._history( username, chatid, replyto)
+        REDIS().lpush(replyto, json.dumps({'function': 'export', 'result': res}))
+    async def histories(self, username: str, replyto, archived:bool=False):
+        res = {}
+        try:
+            collection = self.client.get_or_create_collection(f"{self.userid(username)}_chat", embedding_function=self.embedder)
+            result = collection.get(
+                where={"archived": archived},
+                include=["metadatas"]
+            )
+            for meta in result['metadatas']:
+                if meta['chatid'] not in res:
+                    res[meta['chatid']] = {
+                        'chatid': meta['chatid'],
+                        'title': meta.get('title', '')
+                    }
+        except Exception as e:
+            logging.exception(e)
+        REDIS().lpush(replyto, json.dumps({'function': 'histories', 'result': [*res.values()]}))

@@ -1,21 +1,17 @@
+from clients import MarkerClient
+import logging
+from utils import FileUpload
+logging.basicConfig(level=logging.INFO)
 
-class Atomic:
-    def __init__(self, value, callback):
-        self.value = value
-        self.callback = callback
 
-    def __call__(self, *args, **kwds):
-        self.callback(*args, **kwds)
+marker = MarkerClient(url='http://127.0.0.1:8192')
 
-class Host:
-    def __init__(self):
-        self.atomic = Atomic(value=4567, callback=self.callback)
+from nicegui import ui
 
-    def callback(self, secondary):
-        print(self.atomic.value, secondary)
+def on_upload(e):
+    res = marker(file=FileUpload(filename=e.name, file=e.content.read(), content_type=e.type))
+    logging.info(res)
 
-    def __call__(self):
-        self.atomic(secondary="yay")
+ui.upload(on_upload=on_upload).classes('max-w-full')
 
-host = Host()
-host() 
+ui.run(reconnect_timeout=300)
