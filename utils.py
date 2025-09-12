@@ -13,13 +13,13 @@ import threading
 import traceback
 from copy import copy
 from tqdm import tqdm
-
+import json
 from PIL import Image
 from typing import List
 from PIL.ExifTags import TAGS
 from functools import cache
-
-from dataclasses import dataclass
+import base64
+from dataclasses import dataclass, is_dataclass, asdict
 from markdown_it import MarkdownIt
 
 @dataclass
@@ -28,8 +28,28 @@ class FileUpload:
     file: str 
     content_type: str
 
+class DataclassJSONEncoder(json.JSONEncoder):
+    def default(self, obj):
+        if is_dataclass(obj):
+            d = asdict(obj)
+            if isinstance(d["file"], (bytes, bytearray)):
+                d["file"] = base64.b64encode(d["file"]).decode("utf-8")
+            return d
+        return super().default(obj)
+    
+def fileupload_decoder(d: dict):
+    if {"filename", "file", "content_type"} <= d.keys():
+        file_value = d["file"]
+        try:
+            # If it's valid base64, decode to bytes
+            file_bytes = base64.b64decode(file_value.encode("utf-8"), validate=True)
+        except:
+            file_bytes = file_value.encode("utf-8")
+        return FileUpload(d["filename"], file_bytes, d["content_type"])
+    return d
+
 class FileInfo:
-    def __init__(self, path, fast=False):
+    def __init__(self, path, fast=True):
         assert os.path.isfile(path), f'{path} is not a valid file'
         self.fast = fast
         if not self.fast:
@@ -54,9 +74,13 @@ class FileInfo:
             return self.sys()
     @property
     @cache
+    def content_type(self):
+        return self.magic.from_file(self.path)
+    @property
+    @cache
     def type(self):
         for attr in self.allowed:
-            if attr in  self.magic.from_file(self.path).split("/")[-1]:
+            if attr in  self.content_type.split("/")[-1]:
                 return attr
         return ''
     def pdf(self):
@@ -104,6 +128,7 @@ class FileInfo:
     def sys(self):
         stats = os.stat(self.path)
         return {
+            'type': self.content_type,
             'size': stats.st_size, 
             'last_modified': time.ctime(stats.st_mtime),
             'created': time.ctime(stats.st_ctime),

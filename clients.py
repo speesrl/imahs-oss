@@ -1,3 +1,6 @@
+import uuid
+import yaml
+import hashlib
 import redis
 import logging
 import numpy as np
@@ -5,7 +8,7 @@ from chromadb.api.types import Embeddings, Documents
 from utils import Singleton, FileUpload
 
 
-class MarkerClient:
+class Marker:
     def __init__(
         self,
         *,
@@ -34,7 +37,20 @@ class MarkerClient:
                 "file": (file.filename, file.file, file.content_type)
             }
         ).json()
-        return response
+        text       = response.get('output', "")
+        images     = response.get('images', {})
+        checksum = hashlib.blake2b(text.encode(), digest_size=16, usedforsecurity=False).hexdigest()
+        try:
+            title = response.get('metadata', {}).get('table_of_contents')[0].get("title", f'not found #{checksum}')
+        except:
+            title = f'not found #{checksum}'
+        metadata = {"title": title, 'source': ''}
+        return {
+            'images': images,
+            'text': text,
+            'metadata': metadata,
+            'checksum': checksum
+        }
 
 class InfinityClient:
     def __init__(

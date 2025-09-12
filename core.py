@@ -2,6 +2,7 @@ import os
 import uuid
 import json
 import time 
+import magic
 import base64
 import ollama
 import hashlib 
@@ -9,9 +10,10 @@ import logging
 import asyncio
 import datetime
 import chromadb
+from typing import Dict, List
 
-from clients import REDIS, Embedder, ReRanker
-from utils  import FilesLoader, moving_average, where_am_i
+from clients import REDIS, Embedder, ReRanker, Marker
+from utils  import FilesLoader, moving_average, where_am_i, FileUpload, ContentLoader
 
 class Customer:
     def __init__(self, *, channel, function, args, sleep=.1):
@@ -168,16 +170,21 @@ class RAGProvider(Provider):
     def __init__(
             self,
             *,
-            root
+            root,
+            url_chroma,
+            host_infinity,
+            port_infinity,
+            embedder="intfloat/multilingual-e5-large-instruct",
+            reranker="cross-encoder/mmarco-mMiniLMv2-L12-H384-v1"
         ):
         super().__init__()
         self.root        = root
         self.src         = os.path.abspath(os.path.join(self.root, "documents"))
         self.uid         = hashlib.blake2b('root documents'.encode(), digest_size=16, usedforsecurity=False).hexdigest()
         self.filesloader = FilesLoader()
-        self.client      = chromadb.HttpClient(host='chroma', port=8000, settings=chromadb.config.Settings(anonymized_telemetry=False))
-        self.embedder    = Embedder(url="http://infinity:7997", model="intfloat/multilingual-e5-large-instruct")
-        self.reranker    = ReRanker(url="http://infinity:7997", model="cross-encoder/mmarco-mMiniLMv2-L12-H384-v1")
+        self.client      = chromadb.HttpClient(host=host_infinity, port=port_infinity, settings=chromadb.config.Settings(anonymized_telemetry=False))
+        self.embedder    = Embedder(url=url_chroma, model=embedder)
+        self.reranker    = ReRanker(url=url_chroma, model=reranker)
         if not os.path.exists(self.root):
             logging.warning(f"root {self.root} does not exist")
     async def list(self, replyto: str):
@@ -252,47 +259,24 @@ class RAGProvider(Provider):
 class FileService:
     def __init__(
             self, 
-            *, root
+            *, root, url
         ):
         self.root    = root
-    async def upload(self, chatid: str, username, files: list, replyto: str, url: str, model: str, prompt: str = ''):
+        self.magic   = magic.Magic(mime=True)
+        self.marker  = Marker(url = url)
+        self.allowed = ['application/pdf']
+    async def convert(self, files: List[FileUpload], replyto: str):
         try:
-            converter = Converter()
-            for name in files:
+            for file in files:
                 try:
-                    filename = secure_filename(name)
-                    try:
-                        mimetype, _ = mimetypes.guess_type(filename)
-                        mimetype = mimetype.replace("/", "-")
-                    except:
-                        mimetype = "unknown"
-                    if mimetype in converter.mappings:
-                        raw = base64.b64decode(files[name].encode('ascii'))
-                        converted = converter.convert(filename, raw)
-                        if converted:
-                            (content, metadata, checksum) = converted
-                            frontmatter = yaml.dump(metadata, default_flow_style=False)
-                            text        = f"---\n{frontmatter}---\n\n{content}"
-                            REDIS().lpush(f'requests:chat', json.dumps({
-                                'function': 'add', 'args': {
-                                        'chatid': chatid,  'username': username, 'replyto': replyto, 'docs': [
-                                            {
-                                                'text': text,
-                                                'author': username, 
-                                                'fileid': checksum, 
-                                                'metadata': {
-                                                    **metadata,
-                                                    'mimetype': mimetype,
-                                                }
-                                            }
-                                        ]
-                                    }
-                                })
-                            )
-                    else:
-                        logging.debug(f"debugging the filesystem mimetype: {mimetype}")
-                        REDIS().lpush(f"responses:chatid:{chatid}:llm", json.dumps({'function': 'filesystem', 'result': {'image': files[name]}}))
-                        REDIS().lpush('requests:llm',  json.dumps({'function': 'vlm',  'args': {'chatid': chatid, 'replyto': f"responses:chatid:{chatid}:llm", 'username': username, 'url': url, 'model': model, 'prompt': prompt, 'image': files[name]}}))
+                    mimetype = magic.from_buffer(file.file)
+                    assert mimetype == file.content_type
+                    if mimetype not in self.allowed:
+                        continue 
+                    converted = self.marker(file)
+                    converted['metadata']['source'] = file.filename
+                    converted['metadata']['mimetype'] = file.content_type
+                    REDIS().push(replyto,  json.dumps({'function': 'memory', 'result': converted}))
                 except Exception as e:
                     logging.exception(e)
                     continue
@@ -304,12 +288,18 @@ class ChatService:
     def userid(self, username: str):
         return hashlib.blake2b(username.encode(), digest_size=16, usedforsecurity=False).hexdigest()
     def __init__(
-            self
+            self, 
+            url_chroma,
+            host_infinity,
+            port_infinity,
+            embedder="intfloat/multilingual-e5-large-instruct",
+            reranker="cross-encoder/mmarco-mMiniLMv2-L12-H384-v1"
         ):
         super().__init__()
-        self.client = chromadb.HttpClient(host='chroma', port=8000, settings=chromadb.config.Settings(anonymized_telemetry=False))
-        self.embedder = Embedder(url="http://infinity:7997", model="intfloat/multilingual-e5-large-instruct")
-        self.reranker = ReRanker(url="http://infinity:7997", model="cross-encoder/mmarco-mMiniLMv2-L12-H384-v1")
+        
+        self.client      = chromadb.HttpClient(host=host_infinity, port=port_infinity, settings=chromadb.config.Settings(anonymized_telemetry=False))
+        self.embedder    = Embedder(url=url_chroma, model=embedder)
+        self.reranker    = ReRanker(url=url_chroma, model=reranker)
     async def update(self, username, chatid, title, replyto):
         try:
             collection = self.client.get_or_create_collection(f"{self.userid(username)}_chat", embedding_function=self.embedder)
@@ -399,7 +389,7 @@ class ChatService:
                         historical['otherid'] = ''
                 REDIS().lpush(replyto, json.dumps({'function': 'add', 'result': doc})) 
                 historical['msgid'] = hashlib.blake2b(json.dumps(historical).encode(), digest_size=16, usedforsecurity=False).hexdigest()
-                with MYSQL(service2ip('mariadb'), 3306, 'imahs', 'password', 'imahs') as sql:
+                with MYSQL(host_mysql, port_mysql, ...) as sql:
                     sql.session.execute(
                         sql.insert(Chats).values(
                             **historical
