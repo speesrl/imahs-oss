@@ -17,6 +17,31 @@ services:
       - ./files/redis:/data
     ports:
       - "6379:6379"
+  infinity:
+    pull_policy: if_not_present
+    ports:
+      - "7997:7997"
+    container_name: infinity
+    image: michaelf34/infinity:0.0.76
+    volumes:
+      - ./files/infinity:/app/.cache
+    runtime: nvidia
+    deploy:
+      mode: global
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              capabilities: [gpu]
+    environment:
+      - INFINITY_ANONYMOUS_USAGE_STATS="0"
+    command:
+      - v2
+      - --model-id
+      - "intfloat/multilingual-e5-large-instruct"
+      - --model-id
+      - "cross-encoder/mmarco-mMiniLMv2-L12-H384-v1"
+
   # python:3.13
   python:
     pull_policy: missing

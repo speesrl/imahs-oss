@@ -1,8 +1,8 @@
-from clients import Marker, REDIS
+from imahs.clients import Marker, REDIS
 import logging
 import json
 import magic
-from utils import FileUpload, DataclassJSONEncoder, fileupload_decoder
+from imahs.utils import FileUpload, DataclassJSONEncoder, fileupload_decoder
 logging.basicConfig(level=logging.INFO)
 
 

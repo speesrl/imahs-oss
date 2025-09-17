@@ -1,0 +1,10 @@
+#!/bin/bash
+
+PASSWORD="none"
+
+password=$PASSWORD docker compose -f servers/docker-compose.yml down --remove-orphans
+
+password=$PASSWORD docker compose -f imahs/docker-compose.yml down --remove-orphans
+docker system prune -f 
+docker container prune -f 
+docker image prune -f 

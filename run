@@ -20,10 +20,10 @@ fi
 docker system prune -f 
 docker container prune -f 
 docker image prune -f 
-password=$PASSWORD docker compose -f docker-compose.servers.yml down --remove-orphans
-password=$PASSWORD docker compose -f docker-compose.servers.yml up   -d --build --force-recreate
-password=$PASSWORD docker compose -f docker-compose.servers.yml logs -f
+password=$PASSWORD docker compose -f servers/docker-compose.yml down --remove-orphans
+password=$PASSWORD docker compose -f servers/docker-compose.yml up   -d --build --force-recreate
+password=$PASSWORD docker compose -f servers/docker-compose.yml logs -f
 
-password=$PASSWORD docker compose -f docker-compose.imahs.yml down --remove-orphans
-password=$PASSWORD docker compose -f docker-compose.imahs.yml up   -d --build --force-recreate
-password=$PASSWORD docker compose -f docker-compose.imahs.yml logs -f
+password=$PASSWORD docker compose -f imahs/docker-compose.yml down --remove-orphans
+password=$PASSWORD docker compose -f imahs/docker-compose.yml up   -d --build --force-recreate
+password=$PASSWORD docker compose -f imahs/docker-compose.yml logs -f

@@ -1,0 +1,12 @@
+FROM python:3.13 As deps
+WORKDIR                    /imahs
+COPY   ./requirements.txt  /imahs/requirements.txt
+RUN apt update && apt install -y --no-install-recommends supervisor build-essential ffmpeg libsm6 libxext6 chromium-driver && apt clean
+RUN pip install --no-cache-dir -r requirements.txt
+RUN playwright install-deps && playwright install
+
+FROM deps
+WORKDIR                       /imahs
+COPY      ./imahs/app/        /imahs/app/
+COPY      ./imahs/lib/        /imahs/lib/ 
+CMD ["supervisord", "-c", "/imahs/app/supervisord.conf"]
