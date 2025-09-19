@@ -9,4 +9,4 @@ WORKDIR                 /imahs
 RUN            mkdir -p /imahs/app/  /imahs/lib/ 
 COPY      ./app/        /imahs/app/
 COPY      ./lib/        /imahs/lib/ 
-CMD ["supervisord", "-c", "/imahs/app/supervisord.conf"]
+CMD ["supervisord", "-c", "/imahs/supervisord.conf"]
