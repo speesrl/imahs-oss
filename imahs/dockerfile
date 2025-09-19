@@ -7,6 +7,7 @@ RUN playwright install-deps && playwright install
 
 FROM deps
 WORKDIR                       /imahs
+RUN                   mkdir -p /imahs/app/  /imahs/lib/ 
 COPY      ./imahs/app/        /imahs/app/
 COPY      ./imahs/lib/        /imahs/lib/ 
 CMD ["supervisord", "-c", "/imahs/app/supervisord.conf"]
