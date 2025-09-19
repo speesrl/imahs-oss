@@ -5,7 +5,7 @@ import redis
 import logging
 import numpy as np
 from chromadb.api.types import Embeddings, Documents
-from imahs.lib import utils
+from lib.utils import FileUpload, Singleton
 
 
 class Marker:
@@ -24,7 +24,7 @@ class Marker:
         self._session = httpx.Client(timeout=300)
     def __call__(
             self, 
-            file: utils.FileUpload
+            file: FileUpload
         ) -> Embeddings:
         response = self._session.post(
             f"{self.url}/marker/upload",
@@ -100,7 +100,7 @@ class ReRanker(InfinityClient):
             logging.exception(e)
             return []
     
-class REDIS(metaclass=utils.Singleton):
+class REDIS(metaclass=Singleton):
     def __new__(self, host, client_name, password):
         self = redis.Redis(
                 host=host, 

@@ -11,20 +11,20 @@ import asyncio
 import datetime
 import chromadb
 from typing import Dict, List
-from imahs.lib import db
-from imahs.lib import clients
-from imahs.lib import utils
+from lib.db import MYSQL, ChatsTable
+from lib.clients import REDIS, Marker, Embedder, ReRanker
+from lib.utils import where_am_i, moving_average, FileUpload, FilesLoader, ContentLoader
 class Customer:
     def __init__(self, *, channel, function, args, sleep=.1):
         self.channel = channel
         self.function = function
         self.token = uuid.uuid4().hex
         self.sleep = max(sleep, .1)
-        clients.REDIS().lpush(self.channel, json.dumps({'function': self.function, 'args': {**args, 'token': self.token}}))
+        REDIS().lpush(self.channel, json.dumps({'function': self.function, 'args': {**args, 'token': self.token}}))
     async def __call__(self):
         while True:
             await asyncio.sleep(self.sleep)
-            data = clients.REDIS().rpop(self.channel)
+            data = REDIS().rpop(self.channel)
             if data is not None:
                 try:
                     data = json.loads(data)
@@ -41,7 +41,7 @@ class Provider:
     async def __call__(self):
         while True:
             await asyncio.sleep(self.sleep)
-            data = clients.REDIS().lpop(self.channel)
+            data = REDIS().lpop(self.channel)
             if data is not None:
                 try:
                     data = json.loads(data)
@@ -55,7 +55,7 @@ class Provider:
                     logging.exception(e)
     async def respond(self, result, replyto, token=''):
         try:
-            clients.REDIS().lpush(replyto, json.dumps({'function': utils.where_am_i(), 'result': result, 'timestamp': datetime.datetime.now().isoformat()}))
+            REDIS().lpush(replyto, json.dumps({'function': where_am_i(), 'result': result, 'timestamp': datetime.datetime.now().isoformat()}))
         except Exception as e:
             logging.exception(e)
 
@@ -119,7 +119,7 @@ class ModelProvider(Provider):
         for chunk in stream:
             delta = 1.0/(time.perf_counter() - timestamp + 1e-9)
             timestamp = time.perf_counter()
-            toksec = utils.moving_average(toksec, delta)
+            toksec = moving_average(toksec, delta)
             resp += chunk.message.content
             self.respond(result={'token': chunk.message.content}, replyto=replyto)
         self.respond(result={'toksec': int(toksec)}, replyto=replyto)
@@ -167,7 +167,7 @@ class ModelProvider(Provider):
         for chunk in stream:
             delta = 1.0/(time.perf_counter() - timestamp + 1e-9)
             timestamp = time.perf_counter()
-            toksec = utils.moving_average(toksec, delta)
+            toksec = moving_average(toksec, delta)
             resp += chunk.response
             self.respond(result={'token': chunk.response}, replyto=replyto)
         self.respond(result={'toksec': int(toksec)}, replyto=replyto)
@@ -189,14 +189,14 @@ class RAGProvider(Provider):
         self.root        = root
         self.src         = os.path.abspath(os.path.join(self.root, "documents"))
         self.uid         = hashlib.blake2b('root documents'.encode(), digest_size=16, usedforsecurity=False).hexdigest()
-        self.filesloader = utils.FilesLoader()
+        self.filesloader = FilesLoader()
         self.client      = chromadb.HttpClient(host=host_chroma, port=port_chroma, settings=chromadb.config.Settings(anonymized_telemetry=False))
-        self.embedder    = clients.Embedder(url=url_infinity, model=embedder)
-        self.reranker    = clients.ReRanker(url=url_infinity, model=reranker)
+        self.embedder    = Embedder(url=url_infinity, model=embedder)
+        self.reranker    = ReRanker(url=url_infinity, model=reranker)
         if not os.path.exists(self.root):
             logging.warning(f"root {self.root} does not exist")
     async def list(self, replyto: str):
-        clients.REDIS().lpush(replyto, json.dumps({'function': 'list', 'result': self.filesloader.list(self.src)}))
+        REDIS().lpush(replyto, json.dumps({'function': 'list', 'result': self.filesloader.list(self.src)}))
     async def load(self):
         if not os.path.exists(self.src):
             logging.warning(f"source_directory {self.src} does not exist")
@@ -241,7 +241,7 @@ class RAGProvider(Provider):
                     "content": doc,
                     "metadata": meta
                 })
-            clients.REDIS().lpush(replyto, json.dumps({'function': 'query', 'result': result, 'checksum': checksum}))
+            REDIS().lpush(replyto, json.dumps({'function': 'query', 'result': result, 'checksum': checksum}))
         except Exception as e:
             logging.exception(e)
     async def memory(self, replyto, checksum: str = ''):
@@ -262,7 +262,7 @@ class RAGProvider(Provider):
                     "content": [doc],
                     "metadata": meta
                 }
-        clients.REDIS().lpush(replyto, json.dumps({'function': 'memory', 'result': final}))
+        REDIS().lpush(replyto, json.dumps({'function': 'memory', 'result': final}))
 
 class FileService(Provider):
     def __init__(
@@ -274,7 +274,7 @@ class FileService(Provider):
         self.magic   = magic.Magic(mime=True)
         self.marker  = Marker(url = url)
         self.allowed = ['application/pdf']
-    async def convert(self, files: List[utils.FileUpload], replyto: str):
+    async def convert(self, files: List[FileUpload], replyto: str):
         try:
             for file in files:
                 try:
@@ -285,7 +285,7 @@ class FileService(Provider):
                     converted = self.marker(file)
                     converted['metadata']['source'] = file.filename
                     converted['metadata']['mimetype'] = file.content_type
-                    clients.REDIS().push(replyto,  json.dumps({'function': 'memory', 'result': converted}))
+                    REDIS().push(replyto,  json.dumps({'function': 'memory', 'result': converted}))
                 except Exception as e:
                     logging.exception(e)
                     continue
@@ -307,8 +307,8 @@ class ChatService(Provider):
         super().__init__(channel=channel, sleep=sleep)
         self.host_mysql, self.port_mysql = host_mysql, port_mysql
         self.client      = chromadb.HttpClient(host=host_chroma, port=port_chroma, settings=chromadb.config.Settings(anonymized_telemetry=False))
-        self.embedder    = clients.Embedder(url=url_infinity, model=embedder)
-        self.reranker    = clients.ReRanker(url=url_infinity, model=reranker)
+        self.embedder    = Embedder(url=url_infinity, model=embedder)
+        self.reranker    = ReRanker(url=url_infinity, model=reranker)
     async def update(self, username, chatid, title, replyto):
         try:
             collection = self.client.get_or_create_collection(f"{self.userid(username)}_chat", embedding_function=self.embedder)
@@ -359,7 +359,7 @@ class ChatService(Provider):
                             ]
                         )
                     elif 'fileid' in doc:
-                        loader = utils.ContentLoader(doc['text'])
+                        loader = ContentLoader(doc['text'])
                         tmp = [d.page_content for d in loader.lazy_load()]
                         metadata = {
                             "chatid": chatid,
@@ -396,11 +396,11 @@ class ChatService(Provider):
                             ]
                         )
                         historical['otherid'] = ''
-                clients.REDIS().lpush(replyto, json.dumps({'function': 'add', 'result': doc})) 
+                REDIS().lpush(replyto, json.dumps({'function': 'add', 'result': doc})) 
                 historical['msgid'] = hashlib.blake2b(json.dumps(historical).encode(), digest_size=16, usedforsecurity=False).hexdigest()
-                with db.MYSQL(self.host_mysql, self.port_mysql, ...) as sql:
+                with MYSQL(self.host_mysql, self.port_mysql, ...) as sql:
                     sql.session.execute(
-                        sql.insert(db.ChatsTable).values(
+                        sql.insert(ChatsTable).values(
                             **historical
                         )
                     )
@@ -432,7 +432,7 @@ class ChatService(Provider):
                 )
         except Exception as e:
             logging.exception(e)
-        clients.REDIS().lpush(replyto, json.dumps({'function': 'archive', 'result': True}))
+        REDIS().lpush(replyto, json.dumps({'function': 'archive', 'result': True}))
     async def query(self, username, chatid: str, question, checksum: str, replyto):
         res = {
             'messages': [],
@@ -459,7 +459,7 @@ class ChatService(Provider):
                 })
         except Exception as e:
             logging.exception(e)
-        clients.REDIS().lpush(replyto, json.dumps({'function': 'query', 'result': res, 'checksum': checksum}))
+        REDIS().lpush(replyto, json.dumps({'function': 'query', 'result': res, 'checksum': checksum}))
     async def _history(self, username, chatid: str, replyto):
         history = {}
         try:
@@ -487,10 +487,10 @@ class ChatService(Provider):
         return history
     async def history(self, username, chatid: str, replyto):
         res = await self._history(username, chatid, replyto)
-        clients.REDIS().lpush(replyto, json.dumps({'function': 'history', 'result': res}))
+        REDIS().lpush(replyto, json.dumps({'function': 'history', 'result': res}))
     async def export(self, username, chatid: str, replyto):
         res = await self._history( username, chatid, replyto)
-        clients.REDIS().lpush(replyto, json.dumps({'function': 'export', 'result': res}))
+        REDIS().lpush(replyto, json.dumps({'function': 'export', 'result': res}))
     async def histories(self, username: str, replyto, archived:bool=False):
         res = {}
         try:
@@ -507,5 +507,5 @@ class ChatService(Provider):
                     }
         except Exception as e:
             logging.exception(e)
-        clients.REDIS().lpush(replyto, json.dumps({'function': 'histories', 'result': [*res.values()]}))
+        REDIS().lpush(replyto, json.dumps({'function': 'histories', 'result': [*res.values()]}))
 
