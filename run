@@ -29,3 +29,4 @@ password=$PASSWORD docker compose -f imahs/docker-compose.yml up   -d --build --
 
 password=$PASSWORD docker compose -f imahs/docker-compose.yml logs -f &
 password=$PASSWORD docker compose -f servers/docker-compose.yml logs -f &
+wait
