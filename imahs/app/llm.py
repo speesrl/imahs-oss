@@ -2,11 +2,11 @@ import os
 import logging 
 logging.basicConfig(level=logging.INFO)
 from nicegui import ui
-from imahs.lib.clients import ReRanker
+from imahs.lib import clients
 
 @ui.page("/")
 def index():
-    reranker = ReRanker(
+    reranker = clients.ReRanker(
         url=os.environ.get("url_infinity"), model="cross-encoder/mmarco-mMiniLMv2-L12-H384-v1"
     )
 
