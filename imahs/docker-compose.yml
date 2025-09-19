@@ -8,6 +8,8 @@ services:
     depends_on:
       - python
     pull_policy: never
+    ports:
+      - "8118:8118"
     restart: always
     container_name: imahs-oss
     image: imahs:oss
