@@ -6,8 +6,8 @@ RUN pip install --no-cache-dir -r requirements.txt
 RUN playwright install-deps && playwright install
 
 FROM deps
-WORKDIR                       /imahs
-RUN                   mkdir -p /imahs/app/  /imahs/lib/ 
-COPY      ./imahs/app/        /imahs/app/
-COPY      ./imahs/lib/        /imahs/lib/ 
+WORKDIR                 /imahs
+RUN            mkdir -p /imahs/app/  /imahs/lib/ 
+COPY      ./app/        /imahs/app/
+COPY      ./lib/        /imahs/lib/ 
 CMD ["supervisord", "-c", "/imahs/app/supervisord.conf"]
