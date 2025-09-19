@@ -18,7 +18,7 @@ services:
       dockerfile: dockerfile
     environment:
       - password=${password}
-      - url_infinity=http://localhost:7997
+      - url_infinity=http://10.0.70.225:7997/
     volumes:
       - ./files:/imahs-oss/files
 networks:
