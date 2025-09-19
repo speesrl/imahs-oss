@@ -13,4 +13,4 @@ def index():
     logging.info(
         reranker("hello there mr.", ["greetings", "salutations", "camels"])
     )
-ui.run(port=8118)
+ui.run(host='0.0.0.0', port=8118)
