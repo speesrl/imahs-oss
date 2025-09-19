@@ -1,3 +1,6 @@
+fastapi==0.115.12
+nicegui==2.20.0
+requests==2.32.4
 redis==6.4.0
 ollama==0.5.3
 chromadb-client==1.0.20
