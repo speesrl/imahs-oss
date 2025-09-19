@@ -7,6 +7,22 @@ import numpy as np
 from chromadb.api.types import Embeddings, Documents
 from lib.utils import FileUpload, Singleton
 
+def ping(url, timeout=5.0):
+    try:
+        import httpx
+    except ImportError:
+        raise ValueError(
+            "The httpx python package is not installed. Please install it with `pip install httpx`"
+        )
+    with httpx.Client(timeout=timeout) as client:
+        try:
+            response = client.head(url)
+            if response.status_code < 400:
+                return True
+            else:
+                return False
+        except httpx.RequestError as e:
+            return False
 
 class Marker:
     def __init__(
@@ -21,7 +37,10 @@ class Marker:
                 "The httpx python package is not installed. Please install it with `pip install httpx`"
             )
         self.url = url
-        self._session = httpx.Client(timeout=300)
+        if ping(url):
+            self._session = httpx.Client(timeout=300)
+        else:
+            raise httpx.ConnectError(f"{url} failed to establish a connection")
     def __call__(
             self, 
             file: FileUpload
@@ -67,7 +86,10 @@ class InfinityClient:
             )
         self.url = url
         self.model = model
-        self._session = httpx.Client(timeout=300)
+        if ping(url):
+            self._session = httpx.Client(timeout=300)
+        else:
+            raise httpx.ConnectError(f"{url} failed to establish a connection")
 
 
 class Embedder(InfinityClient):
