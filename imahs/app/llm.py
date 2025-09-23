@@ -10,7 +10,6 @@ if __name__ == "__main__":
     logging.basicConfig(
         level=logging.DEBUG,
         handlers=[
-            logging.FileHandler(os.path.join(root, 'imahs.log'), mode='a'),
             logging.StreamHandler()
         ]
     )
