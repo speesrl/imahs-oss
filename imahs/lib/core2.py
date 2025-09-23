@@ -15,16 +15,17 @@ from lib.clients import REDIS
 # Event-Driven Reactive Architecture (EDA) with an Actor Model:
 
 class EventDrivingActor:
-    def __init__(self, *, channel, replyto, function, args, sleep=.1):
-        self.channel = channel
+    def __init__(self, *, redis_host, redis_client, redis_password, redis_target_channel, redis_replyto_channel, function, args, sleep=.1):
+        self.redis_replyto_channel = redis_replyto_channel
         self.function = function
         self.euuid = uuid.uuid4().hex
         self.sleep = max(sleep, .1)
-        REDIS().lpush(self.channel, json.dumps({'function': self.function, 'euuid': self.euuid, 'replyto': replyto, 'args': {**args}}))
+        self.redis = REDIS(redis_host, redis_client, redis_password)
+        self.redis.lpush(redis_target_channel, json.dumps({'function': self.function, 'euuid': self.euuid, 'replyto': redis_replyto_channel, 'args': {**args}}))
     async def __call__(self):
         while True:
             await asyncio.sleep(self.sleep)
-            data = REDIS().rpop(self.channel)
+            data = self.redis.rpop(self.redis_replyto_channel)
             if data is not None:
                 try:
                     data = json.loads(data)
@@ -39,13 +40,14 @@ class EventDrivingActor:
 
 
 class EventDrivenReactor:
-    def __init__(self, *, channel: str, sleep: float = 0.1):
-        self.channel = channel
+    def __init__(self, *, redis_host, redis_client, redis_password, redis_channel: str, sleep: float = 0.1):
+        self.channel = redis_channel
         self.sleep = max(sleep, 0.1)
+        self.redis = REDIS(redis_host, redis_client, redis_password)
     async def __push__(self, replyto: str, payload: dict):
         try:
             serialized = json.dumps(payload)
-            REDIS().lpush(replyto, serialized)
+            self.redis.lpush(replyto, serialized)
         except Exception:
             logging.exception("Failed to push result to redis")
     async def __run__(self, functor_name: str, replyto: str, euuid, **kwargs):
@@ -108,7 +110,7 @@ class EventDrivenReactor:
         while True:
             await asyncio.sleep(self.sleep)
             try:
-                raw = REDIS().lpop(self.channel)
+                raw = self.redis.lpop(self.channel)
                 if raw is None:
                     continue
                 if isinstance(raw, (bytes, bytearray)):
@@ -138,5 +140,13 @@ class EventDrivenReactor:
                 logging.exception("Unexpected error in EventDrivenReactor loop")
 
 class Ollama(EventDrivenReactor, ollama.Client):
-    def __init__(self, *, channel: str, sleep: float = 0.1, host : str = 'https://localhost', **kwargs):
-        super().__init__(channel=channel, sleep=sleep, host=host, **kwargs)
+    def __init__(self, *, redis_host, redis_client, redis_password, redis_channel: str, sleep: float = 0.1, host : str = 'https://localhost:11434', **kwargs):
+        super().__init__(
+            redis_host=redis_host, 
+            redis_client=redis_client, 
+            redis_password=redis_password, 
+            redis_channel=redis_channel, 
+            sleep=sleep, 
+            host=host, 
+            **kwargs
+        )
