@@ -161,6 +161,9 @@ class EventDrivenReactor:
 
 class Ollama(EventDrivenReactor, ollama.Client):
     def __init__(self, *, redis_host, redis_client, redis_password, redis_channel: str, sleep: float = 0.1, host : str = 'https://localhost:11434', **kwargs):
+        logging.debug(
+            f"redis stuff {json.dumps([redis_host, redis_client, redis_password, redis_channel])}"
+        )
         super().__init__(
             redis_host=redis_host, 
             redis_client=redis_client, 
