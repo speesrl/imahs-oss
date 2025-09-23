@@ -48,6 +48,9 @@ class EventDrivenReactor:
     def __init__(self, *, redis_host, redis_client, redis_password, redis_channel: str, sleep: float = 0.1, **kwargs):
         self.channel = redis_channel
         self.sleep = max(sleep, 0.1)
+        logging.debug(
+            f"redis stuff #2 {json.dumps([redis_host, redis_client, redis_password, redis_channel])}"
+        )
         self.redis = redis.Redis(
                 host=redis_host, 
                 decode_responses=True,
