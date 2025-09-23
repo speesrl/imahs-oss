@@ -118,32 +118,41 @@ class EventDrivenReactor:
             logging.exception("Error while running EventDrivenReactor function %s", functor_name)
     async def event_driven_loop(self):
         while True:
-            logging.info(f"debugging redis channel {self.channel}")
+            logging.info(f"debugging event_driven_loop: redis channel {self.channel}, sleep {self.sleep}")
             await asyncio.sleep(self.sleep)
             try:
+                logging.debug("0")
                 raw = self.redis.lpop(self.channel)
+                logging.debug("1")
                 if raw is None:
                     continue
+                logging.debug("2")
                 if isinstance(raw, (bytes, bytearray)):
                     raw = raw.decode()
+                logging.debug("3")
                 try:
                     data = json.loads(raw)
                 except Exception:
                     logging.exception("Invalid JSON from redis: %r", raw)
                     continue
+                logging.debug("4")
                 function = data.get("function")
                 args = data.get("args") or {}
                 replyto = data.get("replyto")
                 euuid = data.get("euuid")
+                logging.debug("5")
                 if function is None or replyto is None or euuid is None:
                     logging.warning("Missing 'function' or 'replyto' in request: %s", data)
                     continue
+                logging.debug("6")
                 if not isinstance(function, str) or not isinstance(args, dict):
                     logging.warning("Bad types for 'function' or 'args': %s", data)
                     continue
+                logging.debug("7")
                 if not hasattr(self, function) or not callable(getattr(self, function)):
                     logging.warning("Unknown or non-callable function requested: %s", function)
                     continue
+                logging.debug("8")
                 asyncio.create_task(self.__run__(function, replyto, euuid, **args))
             except asyncio.CancelledError:
                 logging.exception("Cancelled EventDrivenReactor loop")
