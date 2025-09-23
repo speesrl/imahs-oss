@@ -4,13 +4,13 @@
 
 import uuid
 import json
+import redis
 import ollama
 import logging
 import asyncio
 import inspect
 import datetime
 import functools
-from lib.clients import REDIS
 
 # Event-Driven Reactive Architecture (EDA) with an Actor Model:
 
@@ -20,7 +20,12 @@ class EventDrivingActor:
         self.function = function
         self.euuid = uuid.uuid4().hex
         self.sleep = max(sleep, .1)
-        self.redis = REDIS(redis_host, redis_client, redis_password)
+        self.redis = redis.Redis(
+                host=redis_host, 
+                decode_responses=True,
+                client_name=redis_client,
+                password=redis_password
+        )
         self.redis.lpush(redis_target_channel, json.dumps({'function': self.function, 'euuid': self.euuid, 'replyto': redis_replyto_channel, 'args': {**args}}))
     async def __call__(self):
         while True:
@@ -43,7 +48,12 @@ class EventDrivenReactor:
     def __init__(self, *, redis_host, redis_client, redis_password, redis_channel: str, sleep: float = 0.1, **kwargs):
         self.channel = redis_channel
         self.sleep = max(sleep, 0.1)
-        self.redis = REDIS(redis_host, redis_client, redis_password)
+        self.redis = redis.Redis(
+                host=redis_host, 
+                decode_responses=True,
+                client_name=redis_client,
+                password=redis_password
+        )
     async def __push__(self, replyto: str, payload: dict):
         try:
             serialized = json.dumps(payload)

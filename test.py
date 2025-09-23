@@ -1,14 +1,24 @@
-import types
+import asyncio
+import argparse
+from imahs.lib.core2 import EventDrivingActor
 
-async def example_gen():
-    yield 1
-    yield 2
+async def main(actor):
+    async for x in actor():
+        print(x)
 
-gen = example_gen()
+if __name__ == "__main__":
+    agp  = argparse.ArgumentParser()
+    agp.add_argument('--redis_host',     required=True, type=str)
+    agp.add_argument('--redis_password', required=True, type=str)
+    args = agp.parse_args()
+    actor = EventDrivingActor(
+        redis_host=args.redis_host,
+        redis_client="imahs",
+        redis_password=args.redis_password,
+        redis_target_channel="imahs:oss",
+        redis_replyto_channel="imahs:actor",
+        function="list",
+        args={}
+    )
 
-print(type(gen))
-# Check if it's a generator
-print(isinstance(gen, types.AsyncGeneratorType))  # True
-
-# Check for a normal list (not a generator)
-print(isinstance([1, 2, 3], types.AsyncGeneratorType))  # False
+    asyncio.run(main(actor))

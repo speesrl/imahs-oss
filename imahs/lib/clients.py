@@ -5,7 +5,7 @@ import redis
 import logging
 import numpy as np
 from chromadb.api.types import Embeddings, Documents
-from lib.utils import FileUpload, Singleton
+from imahs.lib.utils import FileUpload, Singleton
 
 def ping(url, timeout=5.0):
     try:
