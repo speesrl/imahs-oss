@@ -8,6 +8,8 @@ services:
     container_name: redis
     command: >
       redis-server
+      --bind 0.0.0.0
+      --protected-mode no
       --requirepass ${password}
       --save 900 1
       --save 300 10
