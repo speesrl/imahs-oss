@@ -17,8 +17,10 @@ services:
       context: .
       dockerfile: dockerfile
     environment:
-      - password=${password}
-      - url_infinity=http://10.0.70.225:7997/
+      - redis_host=localhost
+      - redis_client=imahs
+      - redis_password=${password}
+      - redis_channel=imahs:oss
     volumes:
       - ./files:/imahs-oss/files
 networks:
