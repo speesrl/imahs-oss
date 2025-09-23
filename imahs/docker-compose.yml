@@ -17,7 +17,7 @@ services:
       context: .
       dockerfile: dockerfile
     environment:
-      - redis_host=localhost
+      - redis_host=${HOST_IP}
       - redis_client=imahs
       - redis_password=${password}
       - redis_channel=imahs:oss

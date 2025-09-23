@@ -23,10 +23,10 @@ docker image prune -f
 password=$PASSWORD docker compose -f servers/docker-compose.yml down --remove-orphans
 password=$PASSWORD docker compose -f servers/docker-compose.yml up   -d --build --force-recreate
 
-password=$PASSWORD docker compose -f imahs/docker-compose.yml down --remove-orphans
-password=$PASSWORD docker compose -f imahs/docker-compose.yml up   -d --build --force-recreate
+password=$PASSWORD HOST_IP=$(hostname -I | awk '{print $1}') docker compose -f imahs/docker-compose.yml down --remove-orphans
+password=$PASSWORD HOST_IP=$(hostname -I | awk '{print $1}') docker compose -f imahs/docker-compose.yml up   -d --build --force-recreate
 
 
-password=$PASSWORD docker compose -f imahs/docker-compose.yml logs -f &
+password=$PASSWORD HOST_IP=$(hostname -I | awk '{print $1}') docker compose -f imahs/docker-compose.yml logs -f &
 password=$PASSWORD docker compose -f servers/docker-compose.yml logs -f &
 wait
