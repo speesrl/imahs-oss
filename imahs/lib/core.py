@@ -14,6 +14,7 @@ from typing import Dict, List
 from lib.db import MYSQL, ChatsTable
 from lib.clients import REDIS, Marker, Embedder, ReRanker
 from lib.utils import where_am_i, moving_average, FileUpload, FilesLoader, ContentLoader
+
 class Customer:
     def __init__(self, *, channel, function, args, sleep=.1):
         self.channel = channel
@@ -59,7 +60,7 @@ class Provider:
         except Exception as e:
             logging.exception(e)
 
-class ModelProvider(Provider):
+class LLMProvider(Provider):
     def __init__(self, *, resources: dict, channel: str, sleep:float=0.1):
         super().__init__(channel=channel, sleep=sleep)
         self.resources = resources

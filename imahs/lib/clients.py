@@ -20,8 +20,10 @@ def ping(url, timeout=5.0):
             if response.status_code < 400:
                 return True
             else:
+                print(response.status_code)
                 return False
         except httpx.RequestError as e:
+            print(e)
             return False
 
 class Marker:
@@ -37,10 +39,7 @@ class Marker:
                 "The httpx python package is not installed. Please install it with `pip install httpx`"
             )
         self.url = url
-        if ping(url):
-            self._session = httpx.Client(timeout=300)
-        else:
-            raise httpx.ConnectError(f"{url} failed to establish a connection")
+        self._session = httpx.Client(timeout=300)
     def __call__(
             self, 
             file: FileUpload
@@ -86,10 +85,7 @@ class InfinityClient:
             )
         self.url = url
         self.model = model
-        if ping(url):
-            self._session = httpx.Client(timeout=300)
-        else:
-            raise httpx.ConnectError(f"{url} failed to establish a connection")
+        self._session = httpx.Client(timeout=300)
 
 
 class Embedder(InfinityClient):
@@ -107,6 +103,7 @@ class ReRanker(InfinityClient):
             f"{self.url}/rerank",
             json={"query": query, "documents": documents, "model": self.model},
         ).json()
+        logging.info(response)
         results = response.get('results', [])
         try:
             relevances = np.zeros((len(results,)), dtype=np.float64)

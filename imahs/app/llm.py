@@ -1,21 +1,20 @@
-import os 
+import os
+import asyncio 
 import logging 
-logging.basicConfig(level=logging.INFO)
-from nicegui import ui
-from lib.clients import ReRanker
+from lib.core2 import Ollama
+from lib.utils import ExceptionFormatter
 
-@ui.page("/")
-def index():
-    logging.info("connecting")
-    try:
-        reranker = ReRanker(
-            url=os.environ.get("url_infinity"), model="cross-encoder/mmarco-mMiniLMv2-L12-H384-v1"
-        )
 
-        logging.info(
-            reranker("hello there mr.", ["greetings", "salutations", "camels"])
-        )
-    except Exception as e:
-        logging.exception(e)
-        logging.exception(os.environ.get("url_infinity"))
-ui.run(host='0.0.0.0', port=8118)
+if __name__ == "__main__":
+    root = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'files')
+    logging.basicConfig(
+        level=logging.DEBUG,
+        handlers=[
+            logging.FileHandler(os.path.join(root, 'imahs.log'), mode='a'),
+            logging.StreamHandler()
+        ]
+    )
+    for handler in logging.getLogger().handlers:
+        handler.setFormatter(ExceptionFormatter("%(levelname)s: %(message)s"))
+    lm = Ollama()
+    asyncio.run(lm())

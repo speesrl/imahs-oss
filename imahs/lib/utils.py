@@ -414,3 +414,11 @@ def where_am_i():
     stack = traceback.extract_stack()
     _, _, func, _ = stack[-2]
     return func
+
+class ExceptionFormatter(logging.Formatter):
+    def format(self, record):
+        if record.exc_info:
+            return f"Exception: {record.getMessage()}\n{self.formatException(record.exc_info)}"
+        elif record.levelname == "ERROR":
+            return f"Error: {record.getMessage()}\n"
+        return super().format(record)
