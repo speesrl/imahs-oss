@@ -116,7 +116,7 @@ class EventDrivenReactor:
                 )
         except Exception:
             logging.exception("Error while running EventDrivenReactor function %s", functor_name)
-    async def __call__(self):
+    async def event_driven_loop(self):
         while True:
             logging.info(f"debugging redis channel {self.channel}")
             await asyncio.sleep(self.sleep)
@@ -146,7 +146,7 @@ class EventDrivenReactor:
                     continue
                 asyncio.create_task(self.__run__(function, replyto, euuid, **args))
             except asyncio.CancelledError:
-                raise
+                logging.exception("Cancelled EventDrivenReactor loop")
             except Exception:
                 logging.exception("Unexpected error in EventDrivenReactor loop")
 

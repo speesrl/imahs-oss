@@ -21,4 +21,4 @@ if __name__ == "__main__":
         redis_password=os.environ.get('redis_password'),
         redis_channel=os.environ.get('redis_channel')
     )
-    asyncio.run(lm())
+    asyncio.run(lm.event_driven_loop())
