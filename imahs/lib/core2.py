@@ -118,6 +118,7 @@ class EventDrivenReactor:
             logging.exception("Error while running EventDrivenReactor function %s", functor_name)
     async def __call__(self):
         while True:
+            logging.info(f"debugging redis channel {self.channel}")
             await asyncio.sleep(self.sleep)
             try:
                 raw = self.redis.lpop(self.channel)
