@@ -40,7 +40,7 @@ class EventDrivingActor:
 
 
 class EventDrivenReactor:
-    def __init__(self, *, redis_host, redis_client, redis_password, redis_channel: str, sleep: float = 0.1):
+    def __init__(self, *, redis_host, redis_client, redis_password, redis_channel: str, sleep: float = 0.1, **kwargs):
         self.channel = redis_channel
         self.sleep = max(sleep, 0.1)
         self.redis = REDIS(redis_host, redis_client, redis_password)
