@@ -16,9 +16,9 @@ if __name__ == "__main__":
     for handler in logging.getLogger().handlers:
         handler.setFormatter(ExceptionFormatter("%(levelname)s: %(message)s"))
     lm = Ollama(
-        os.environ.get('redis_host'),
-        os.environ.get('redis_client'),
-        os.environ.get('redis_password'),
-        os.environ.get('redis_channel')
+        redis_host=os.environ.get('redis_host'),
+        redis_client=os.environ.get('redis_client'),
+        redis_password=os.environ.get('redis_password'),
+        redis_channel=os.environ.get('redis_channel')
     )
     asyncio.run(lm())
