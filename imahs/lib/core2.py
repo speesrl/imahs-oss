@@ -61,7 +61,8 @@ class EventDrivenReactor:
                 host=redis_host, 
                 decode_responses=True,
                 client_name=redis_client,
-                password=redis_password
+                password=redis_password,
+                socket_timeout=3
         )
     async def __push__(self, replyto: str, payload: dict):
         try:
