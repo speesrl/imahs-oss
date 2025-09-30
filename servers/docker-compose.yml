@@ -1,4 +1,30 @@
 services:
+  ollama:
+    profiles: ["start"]
+    pull_policy: if_not_present
+    ports:
+      - "11434:11434"
+    environment:
+      - OLLAMA_BIND=0.0.0.0
+      - OLLAMA_HOST=0.0.0.0
+      - PUID=${PUID:-1000}
+      - PGID=${PGID:-1000}
+      - OLLAMA_KEEP_ALIVE=-1
+      - ENABLE_IMAGE_GENERATION=True
+      - CUDA_VISIBLE_DEVICES=0 
+    restart: always
+    container_name: ollama
+    image: ollama/ollama:0.9.0
+    volumes:
+      - ./files/ollama:/root/.ollama
+    runtime: nvidia
+    deploy:
+      mode: global
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              capabilities: [gpu]
   redis:
     cpus: 8.0
     mem_limit: 4096m
@@ -6,6 +32,7 @@ services:
     pull_policy: if_not_present
     image: redis:8.2
     container_name: redis
+    profiles: ["start"]
     command: >
       redis-server
       --bind 0.0.0.0
@@ -20,6 +47,7 @@ services:
     ports:
       - "6379:6379"
   infinity:
+    profiles: ["start"]
     pull_policy: if_not_present
     ports:
       - "7997:7997"
@@ -49,6 +77,7 @@ services:
     pull_policy: missing
     image: python:3.13
   marker:
+    profiles: ["donotstart"]
     depends_on:
       - python
     pull_policy: never

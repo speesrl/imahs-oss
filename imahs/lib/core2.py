@@ -30,6 +30,8 @@ class EventDrivingActor:
                 client_name=redis_client,
                 password=redis_password
         )
+        self.args = args
+        self.redis_target_channel = redis_target_channel
         logging.debug(f"debugging redis_target_channel: {redis_target_channel} redis_replyto_channel: {self.redis_replyto_channel}")
         self.redis.lpush(redis_target_channel, json.dumps({'function': self.function, 'euuid': self.euuid, 'replyto': redis_replyto_channel, 'args': {**args}}))
         logging.debug(f"2")
@@ -50,6 +52,13 @@ class EventDrivingActor:
                 except Exception as e:
                     logging.exception(e)
 
+class Serializer:
+    def __init__(self):
+        pass
+    def __call__(self, obj):
+        if isinstance(obj, ollama.ListResponse):
+            return obj.model_dump_json()
+        raise Exception(f"no serializer found for {type(obj)}")
 
 class EventDrivenReactor:
     def __init__(self, *, redis_host, redis_client, redis_password, redis_channel: str, sleep: float = 0.1, **kwargs):
@@ -66,11 +75,13 @@ class EventDrivenReactor:
                 password=redis_password,
                 socket_timeout=3
         )
+        self.serializer = Serializer()
     async def __push__(self, replyto: str, payload: dict):
         try:
             serialized = json.dumps(payload)
             self.redis.lpush(replyto, serialized)
         except Exception:
+            logging.debug(f"payload {payload}")
             logging.exception("Failed to push result to redis")
     async def __run__(self, functor_name: str, replyto: str, euuid, **kwargs):
         func = getattr(self, functor_name)
@@ -84,7 +95,7 @@ class EventDrivenReactor:
                             "euuid": euuid,
                             "function": functor_name,
                             "scheme": "async",
-                            "result": value,
+                            "result": self.serializer(value),
                             "timestamp": datetime.datetime.now().isoformat(),
                         },
                     )
@@ -96,7 +107,7 @@ class EventDrivenReactor:
                         "euuid": euuid,
                         "function": functor_name,
                         "scheme": "sync",
-                        "result": value,
+                            "result": self.serializer(value),
                         "timestamp": datetime.datetime.now().isoformat(),
                     },
                 )
@@ -108,7 +119,7 @@ class EventDrivenReactor:
                             "euuid": euuid,
                             "function": functor_name,
                             "scheme": "async",
-                            "result": value,
+                            "result": self.serializer(value),
                             "timestamp": datetime.datetime.now().isoformat(),
                         },
                     )
@@ -122,7 +133,7 @@ class EventDrivenReactor:
                         "euuid": euuid,
                         "function": functor_name,
                         "scheme": "sync",
-                        "result": value,
+                        "result": self.serializer(value),
                         "timestamp": datetime.datetime.now().isoformat(),
                     },
                 )
@@ -134,8 +145,8 @@ class EventDrivenReactor:
             await asyncio.sleep(self.sleep)
             try:
                 logging.debug("0")
-                raw = self.redis.rpop(self.channel)
-                logging.debug("1")
+                raw = self.redis.lpop(self.channel)
+                logging.debug(f"1 debugging event_driven_loop: redis channel {self.channel}, sleep {self.sleep} data: {raw}")
                 if raw is None:
                     continue
                 logging.debug("2")
@@ -172,13 +183,13 @@ class EventDrivenReactor:
                 logging.exception("Unexpected error in EventDrivenReactor loop")
 
 class Ollama(EventDrivenReactor, ollama.Client):
-    def __init__(self, *, redis_host, redis_client, redis_password, redis_channel: str, sleep: float = 0.1, host : str = 'https://localhost:11434', **kwargs):
-        super().__init__(
+    def __init__(self, *, redis_host, redis_client, redis_password, redis_channel: str, sleep: float = 0.1, host : str = 'http://localhost:11434', **kwargs):
+        EventDrivenReactor.__init__(
+            self,
             redis_host=redis_host, 
             redis_client=redis_client, 
             redis_password=redis_password, 
             redis_channel=redis_channel, 
-            sleep=sleep, 
-            host=host, 
-            **kwargs
+            sleep=sleep
         )
+        ollama.Client.__init__(self, host=host, **kwargs)

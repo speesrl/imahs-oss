@@ -19,6 +19,7 @@ if __name__ == "__main__":
         redis_host=os.environ.get('redis_host'),
         redis_client=os.environ.get('redis_client'),
         redis_password=os.environ.get('redis_password'),
-        redis_channel=os.environ.get('redis_channel')
+        redis_channel=os.environ.get('redis_channel'),
+        host=os.environ.get('ollama_host')
     )
     asyncio.run(lm.event_driven_loop())

@@ -8,8 +8,6 @@ services:
     depends_on:
       - python
     pull_policy: never
-    ports:
-      - "8118:8118"
     restart: always
     container_name: imahs-oss
     image: imahs:oss
@@ -17,6 +15,7 @@ services:
       context: .
       dockerfile: dockerfile
     environment:
+      - ollama_host=${HOST_IP}:11434
       - redis_host=${HOST_IP}
       - redis_client=imahs
       - redis_password=${password}
