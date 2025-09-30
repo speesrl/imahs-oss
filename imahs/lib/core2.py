@@ -21,10 +21,11 @@ class EventDrivingActor:
         self.euuid = uuid.uuid4().hex
         self.sleep = max(sleep, .1)
         logging.debug(
-            f"redis stuff #2 {json.dumps([redis_host, redis_client, redis_password])}"
+            f"redis stuff EventDrivingActor {json.dumps([redis_host, redis_client, redis_password])}"
         )
         self.redis = redis.Redis(
                 host=redis_host, 
+                port=6379,
                 decode_responses=True,
                 client_name=redis_client,
                 password=redis_password
@@ -55,10 +56,11 @@ class EventDrivenReactor:
         self.channel = redis_channel
         self.sleep = max(sleep, 0.1)
         logging.debug(
-            f"redis stuff #2 {json.dumps([redis_host, redis_client, redis_password, redis_channel])}"
+            f"redis stuff EventDrivenReactor {json.dumps([redis_host, redis_client, redis_password, redis_channel])}"
         )
         self.redis = redis.Redis(
                 host=redis_host, 
+                port=6379,
                 decode_responses=True,
                 client_name=redis_client,
                 password=redis_password,
@@ -171,9 +173,6 @@ class EventDrivenReactor:
 
 class Ollama(EventDrivenReactor, ollama.Client):
     def __init__(self, *, redis_host, redis_client, redis_password, redis_channel: str, sleep: float = 0.1, host : str = 'https://localhost:11434', **kwargs):
-        logging.debug(
-            f"redis stuff {json.dumps([redis_host, redis_client, redis_password, redis_channel])}"
-        )
         super().__init__(
             redis_host=redis_host, 
             redis_client=redis_client, 
