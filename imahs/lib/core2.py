@@ -20,15 +20,21 @@ class EventDrivingActor:
         self.function = function
         self.euuid = uuid.uuid4().hex
         self.sleep = max(sleep, .1)
+        logging.debug(
+            f"redis stuff #2 {json.dumps([redis_host, redis_client, redis_password])}"
+        )
         self.redis = redis.Redis(
                 host=redis_host, 
                 decode_responses=True,
                 client_name=redis_client,
                 password=redis_password
         )
+        logging.debug(f"debugging redis_target_channel: {redis_target_channel} redis_replyto_channel: {self.redis_replyto_channel}")
         self.redis.lpush(redis_target_channel, json.dumps({'function': self.function, 'euuid': self.euuid, 'replyto': redis_replyto_channel, 'args': {**args}}))
+        logging.debug(f"2")
     async def __call__(self):
         while True:
+            logging.debug(f"debugging {self.redis_replyto_channel}")
             await asyncio.sleep(self.sleep)
             data = self.redis.rpop(self.redis_replyto_channel)
             if data is not None:
