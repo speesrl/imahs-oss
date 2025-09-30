@@ -34,9 +34,9 @@ class EventDrivingActor:
         logging.debug(f"2")
     async def __call__(self):
         while True:
-            logging.debug(f"debugging {self.redis_replyto_channel}")
             await asyncio.sleep(self.sleep)
             data = self.redis.rpop(self.redis_replyto_channel)
+            logging.debug(f"debugging channel: {self.redis_replyto_channel}, data: {data}")
             if data is not None:
                 try:
                     data = json.loads(data)
@@ -131,7 +131,7 @@ class EventDrivenReactor:
             await asyncio.sleep(self.sleep)
             try:
                 logging.debug("0")
-                raw = self.redis.lpop(self.channel)
+                raw = self.redis.rpop(self.channel)
                 logging.debug("1")
                 if raw is None:
                     continue
