@@ -1,5 +1,5 @@
 cff-version: 1.2.0
-title: IMAHS OSS
+title: Model Orchestration Protocol
 message: >-
   If you use this software, please cite it using the
   metadata from this file.
@@ -7,7 +7,7 @@ type: software
 authors:
   - given-names: Aly
     family-names: Shmahell
-    affiliation: SPEE SRL
+    affiliation: SPEE SRL, Università degli Studi dell'Aquila
     orcid: 'https://orcid.org/0000-0002-4325-2289'
 repository-code: 'https://github.com/speesrl/imahs-oss'
 url: 'https:spee.it'

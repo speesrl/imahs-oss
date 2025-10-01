@@ -1,8 +1,8 @@
 import os
 import asyncio 
 import logging 
-from lib.core2 import Ollama
-from lib.utils import ExceptionFormatter
+from mop.core import Ollama
+from mop.utils import ExceptionFormatter
 
 
 if __name__ == "__main__":
@@ -19,7 +19,7 @@ if __name__ == "__main__":
         redis_host=os.environ.get('redis_host'),
         redis_client=os.environ.get('redis_client'),
         redis_password=os.environ.get('redis_password'),
-        redis_channel=os.environ.get('redis_channel'),
+        redis_channel_requests=os.environ.get('redis_channel_requests'),
         host=os.environ.get('ollama_host')
     )
     asyncio.run(lm.event_driven_loop())

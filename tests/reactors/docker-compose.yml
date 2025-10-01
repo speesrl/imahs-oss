@@ -3,25 +3,25 @@ services:
   python:
     pull_policy: missing
     image: python:3.13
-  # imahs-oss
-  imahs-oss:
+  # mop-reactors
+  mop-reactors:
     depends_on:
       - python
     pull_policy: never
     restart: always
-    container_name: imahs-oss
-    image: imahs:oss
+    container_name: mop-reactors
+    image: mop-reactors
     build: 
-      context: .
-      dockerfile: dockerfile
+      context: ../..
+      dockerfile: tests/reactors/dockerfile
     environment:
       - ollama_host=${HOST_IP}:11434
       - redis_host=${HOST_IP}
-      - redis_client=imahs
+      - redis_client=client
       - redis_password=${password}
-      - redis_channel=imahs:oss
+      - redis_channel_requests=mop:requests
     volumes:
-      - ./files:/imahs-oss/files
+      - ./files:/workspace/files
 networks:
-  imahs-oss:
+  mop-reactors:
     driver: bridge

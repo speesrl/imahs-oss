@@ -14,9 +14,7 @@ import traceback
 from copy import copy
 from tqdm import tqdm
 import json
-from PIL import Image
 from typing import List
-from PIL.ExifTags import TAGS
 from functools import cache
 import base64
 from dataclasses import dataclass, is_dataclass, asdict
@@ -53,12 +51,7 @@ class FileInfo:
         assert os.path.isfile(path), f'{path} is not a valid file'
         self.fast = fast
         if not self.fast:
-            try:
-                from docx import Document
-                from PyPDF2 import PdfReader
-                from openpyxl import load_workbook
-            except ImportError as e:
-                logging.exception(e)
+            raise NotImplementedError
         self.magic = magic.Magic(mime=True)
         self.path = path
         self.allowed = [attr for attr in dir(self) if (not isinstance(getattr(self.__class__, attr, None), property) and callable(getattr(self, attr)))]
@@ -83,48 +76,6 @@ class FileInfo:
             if attr in  self.content_type.split("/")[-1]:
                 return attr
         return ''
-    def pdf(self):
-        with open(self.path, 'rb') as file:
-            reader = PdfReader(file)
-            metadata = reader.metadata
-            return metadata
-
-    def word(self):
-        doc = Document(self.path)
-        properties = doc.core_properties
-        metadata = {
-            'author': properties.author,
-            'title': properties.title,
-            'subject': properties.subject,
-            'keywords': properties.keywords,
-            'last_modified_by': properties.last_modified_by,
-            'created': properties.created,
-            'modified': properties.modified,
-        }
-        return metadata
-
-    def excel(self):
-        wb = load_workbook(self.path)
-        properties = wb.properties
-        metadata = {
-            'title': properties.title,
-            'subject': properties.subject,
-            'author': properties.creator,
-            'last_modified_by': properties.lastModifiedBy,
-            'created': properties.created,
-            'modified': properties.modified,
-        }
-        return metadata
-    def image(self):
-        image = Image.open(self.path)
-        exif_data = image._lpopif()
-        
-        metadata = {}
-        if exif_data:
-            for tag, value in exif_data.items():
-                tag_name = TAGS.get(tag, tag)
-                metadata[tag_name] = value
-        return metadata
     def sys(self):
         stats = os.stat(self.path)
         return {

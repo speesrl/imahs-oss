@@ -1,0 +1,27 @@
+services:
+  # python:3.13
+  python:
+    pull_policy: missing
+    image: python:3.13
+  # mop-actors
+  mop-actors:
+    depends_on:
+      - python
+    pull_policy: never
+    restart: always
+    container_name: mop-actors
+    image: mop-actors
+    build: 
+      context: ../..
+      dockerfile: tests/actors/dockerfile
+    environment:
+      - redis_host=${HOST_IP}
+      - redis_client=client
+      - redis_password=${password}
+      - redis_channel_requests=mop:requests
+      - redis_channel_replies=mop:replies
+    volumes:
+      - ./files:/workspace/files
+networks:
+  mop-reactors:
+    driver: bridge

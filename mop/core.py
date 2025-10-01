@@ -4,7 +4,6 @@
 
 import uuid
 import json
-import redis
 import ollama
 import logging
 import asyncio
@@ -12,34 +11,28 @@ import inspect
 import datetime
 import functools
 
-# Event-Driven Reactive Architecture (EDA) with an Actor Model:
+import mop.clients
 
 class EventDrivingActor:
-    def __init__(self, *, redis_host, redis_client, redis_password, redis_target_channel, redis_replyto_channel, function, args, sleep=.1):
-        self.redis_replyto_channel = redis_replyto_channel
+    def __init__(self, *, redis_host, redis_client, redis_password, redis_channel_requests, redis_channel_replies, function, args, sleep=.1):
+        self.redis_channel_replies = redis_channel_replies
         self.function = function
         self.euuid = uuid.uuid4().hex
         self.sleep = max(sleep, .1)
-        logging.debug(
-            f"redis stuff EventDrivingActor {json.dumps([redis_host, redis_client, redis_password])}"
-        )
-        self.redis = redis.Redis(
+        self.redis = mop.clients.Redis(
                 host=redis_host, 
-                port=6379,
-                decode_responses=True,
                 client_name=redis_client,
                 password=redis_password
         )
         self.args = args
-        self.redis_target_channel = redis_target_channel
-        logging.debug(f"debugging redis_target_channel: {redis_target_channel} redis_replyto_channel: {self.redis_replyto_channel}")
-        self.redis.lpush(redis_target_channel, json.dumps({'function': self.function, 'euuid': self.euuid, 'replyto': redis_replyto_channel, 'args': {**args}}))
-        logging.debug(f"2")
-    async def __call__(self):
+        self.redis_channel_requests = redis_channel_requests
+        
+    async def __call__(self, repeat=False):
+        self.redis.lpush(self.redis_channel_requests, json.dumps({'function': self.function, 'euuid': self.euuid, 'replyto': self.redis_channel_replies, 'args': {**self.args}}))
         while True:
             await asyncio.sleep(self.sleep)
-            data = self.redis.rpop(self.redis_replyto_channel)
-            logging.debug(f"debugging channel: {self.redis_replyto_channel}, data: {data}")
+            data = self.redis.rpop(self.redis_channel_replies)
+            logging.info(f"actor loop, data: {data}")
             if data is not None:
                 try:
                     data = json.loads(data)
@@ -51,6 +44,8 @@ class EventDrivingActor:
                             yield result
                 except Exception as e:
                     logging.exception(e)
+                if repeat:
+                    self.redis.lpush(self.redis_channel_requests, json.dumps({'function': self.function, 'euuid': self.euuid, 'replyto': self.redis_channel_replies, 'args': {**self.args}}))
 
 class Serializer:
     def __init__(self):
@@ -61,19 +56,14 @@ class Serializer:
         raise Exception(f"no serializer found for {type(obj)}")
 
 class EventDrivenReactor:
-    def __init__(self, *, redis_host, redis_client, redis_password, redis_channel: str, sleep: float = 0.1, **kwargs):
-        self.channel = redis_channel
+    def __init__(self, *, redis_host, redis_client, redis_password, redis_channel_requests: str, sleep: float = 0.1, **kwargs):
+        self.redis_channel_requests = redis_channel_requests
         self.sleep = max(sleep, 0.1)
-        logging.debug(
-            f"redis stuff EventDrivenReactor {json.dumps([redis_host, redis_client, redis_password, redis_channel])}"
-        )
-        self.redis = redis.Redis(
+
+        self.redis = mop.clients.Redis(
                 host=redis_host, 
-                port=6379,
-                decode_responses=True,
                 client_name=redis_client,
-                password=redis_password,
-                socket_timeout=3
+                password=redis_password
         )
         self.serializer = Serializer()
     async def __push__(self, replyto: str, payload: dict):
@@ -81,7 +71,6 @@ class EventDrivenReactor:
             serialized = json.dumps(payload)
             self.redis.lpush(replyto, serialized)
         except Exception:
-            logging.debug(f"payload {payload}")
             logging.exception("Failed to push result to redis")
     async def __run__(self, functor_name: str, replyto: str, euuid, **kwargs):
         func = getattr(self, functor_name)
@@ -141,41 +130,32 @@ class EventDrivenReactor:
             logging.exception("Error while running EventDrivenReactor function %s", functor_name)
     async def event_driven_loop(self):
         while True:
-            logging.info(f"debugging event_driven_loop: redis channel {self.channel}, sleep {self.sleep}")
             await asyncio.sleep(self.sleep)
             try:
-                logging.debug("0")
-                raw = self.redis.lpop(self.channel)
-                logging.debug(f"1 debugging event_driven_loop: redis channel {self.channel}, sleep {self.sleep} data: {raw}")
+                raw = self.redis.lpop(self.redis_channel_requests)
+                logging.info(f"reactor loop, data: {raw}")
                 if raw is None:
                     continue
-                logging.debug("2")
                 if isinstance(raw, (bytes, bytearray)):
                     raw = raw.decode()
-                logging.debug("3")
                 try:
                     data = json.loads(raw)
                 except Exception:
                     logging.exception("Invalid JSON from redis: %r", raw)
                     continue
-                logging.debug("4")
                 function = data.get("function")
                 args = data.get("args") or {}
                 replyto = data.get("replyto")
                 euuid = data.get("euuid")
-                logging.debug("5")
                 if function is None or replyto is None or euuid is None:
                     logging.warning("Missing 'function' or 'replyto' in request: %s", data)
                     continue
-                logging.debug("6")
                 if not isinstance(function, str) or not isinstance(args, dict):
                     logging.warning("Bad types for 'function' or 'args': %s", data)
                     continue
-                logging.debug("7")
                 if not hasattr(self, function) or not callable(getattr(self, function)):
                     logging.warning("Unknown or non-callable function requested: %s", function)
                     continue
-                logging.debug("8")
                 asyncio.create_task(self.__run__(function, replyto, euuid, **args))
             except asyncio.CancelledError:
                 logging.exception("Cancelled EventDrivenReactor loop")
@@ -183,13 +163,13 @@ class EventDrivenReactor:
                 logging.exception("Unexpected error in EventDrivenReactor loop")
 
 class Ollama(EventDrivenReactor, ollama.Client):
-    def __init__(self, *, redis_host, redis_client, redis_password, redis_channel: str, sleep: float = 0.1, host : str = 'http://localhost:11434', **kwargs):
+    def __init__(self, *, redis_host, redis_client, redis_password, redis_channel_requests: str, sleep: float = 0.1, host : str = 'http://localhost:11434', **kwargs):
         EventDrivenReactor.__init__(
             self,
             redis_host=redis_host, 
             redis_client=redis_client, 
             redis_password=redis_password, 
-            redis_channel=redis_channel, 
+            redis_channel_requests=redis_channel_requests, 
             sleep=sleep
         )
         ollama.Client.__init__(self, host=host, **kwargs)

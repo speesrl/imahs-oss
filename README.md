@@ -1,1 +1,1 @@
-# imahs-oss
+# Model Orchestration Protocol

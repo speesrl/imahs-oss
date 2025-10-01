@@ -5,7 +5,7 @@ import redis
 import logging
 import numpy as np
 from chromadb.api.types import Embeddings, Documents
-from imahs.lib.utils import FileUpload, Singleton
+from mop.utils import FileUpload, Singleton
 
 def ping(url, timeout=5.0):
     try:
@@ -103,7 +103,6 @@ class ReRanker(InfinityClient):
             f"{self.url}/rerank",
             json={"query": query, "documents": documents, "model": self.model},
         ).json()
-        logging.info(response)
         results = response.get('results', [])
         try:
             relevances = np.zeros((len(results,)), dtype=np.float64)
@@ -119,7 +118,7 @@ class ReRanker(InfinityClient):
             logging.exception(e)
             return []
     
-class REDIS(metaclass=Singleton):
+class Redis(metaclass=Singleton):
     def __new__(self, host, client_name, password):
         self = redis.Redis(
                 host=host, 
