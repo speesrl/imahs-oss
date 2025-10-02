@@ -8,7 +8,7 @@ from mop.utils import ExceptionFormatter
 if __name__ == "__main__":
     root = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), 'files')
     logging.basicConfig(
-        level=logging.DEBUG,
+        level=logging.INFO,
         handlers=[
             logging.StreamHandler()
         ]

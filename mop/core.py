@@ -10,7 +10,7 @@ import asyncio
 import inspect
 import datetime
 import functools
-
+import time
 import mop.clients
 
 class EventDrivingActor:
@@ -27,12 +27,12 @@ class EventDrivingActor:
         self.args = args
         self.redis_channel_requests = redis_channel_requests
         
-    async def __call__(self, repeat=False):
+    async def __call__(self, repeat=False, timeout=0):
         self.redis.lpush(self.redis_channel_requests, json.dumps({'function': self.function, 'euuid': self.euuid, 'replyto': self.redis_channel_replies, 'args': {**self.args}}))
+        t = time.time()
         while True:
             await asyncio.sleep(self.sleep)
             data = self.redis.lpop(self.redis_channel_replies)
-            logging.info(f"actor loop, data: {data}")
             if data is not None:
                 try:
                     data = json.loads(data)
@@ -45,8 +45,17 @@ class EventDrivingActor:
                 except Exception as e:
                     logging.exception(e)
                 if repeat:
+                    if not any(isinstance(repeat, cls) for cls in [bool, int]):
+                        continue
                     self.redis.lpush(self.redis_channel_requests, json.dumps({'function': self.function, 'euuid': self.euuid, 'replyto': self.redis_channel_replies, 'args': {**self.args}}))
-
+                    if isinstance(repeat, int):
+                        repeat -= 1
+                        t = time.time()
+            elif timeout:
+                if time.time()-t > timeout:
+                    break 
+        return
+            
 class Serializer:
     def __init__(self):
         pass
@@ -135,7 +144,6 @@ class EventDrivenReactor:
                 for channel in self.redis.scan_iter(f"{self.redis_channel_requests}:*"):
                     channel = channel.decode() if isinstance(channel, bytes) else channel
                     raw = self.redis.lpop(channel)
-                    logging.info(f"reactor loop, data: {raw}")
                     if raw is None:
                         continue
                     if isinstance(raw, (bytes, bytearray)):
@@ -149,7 +157,6 @@ class EventDrivenReactor:
                     args = data.get("args") or {}
                     replyto = data.get("replyto")
                     euuid = data.get("euuid")
-                    logging.info(f"should reply to {replyto}")
                     if function is None or replyto is None or euuid is None:
                         logging.warning("Missing 'function' or 'replyto' in request: %s", data)
                         continue

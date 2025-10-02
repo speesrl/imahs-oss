@@ -15,6 +15,7 @@ services:
       context: ../..
       dockerfile: tests/actors/dockerfile
     environment:
+      - ollama_host=${HOST_IP}:11434
       - redis_host=${HOST_IP}
       - redis_client=client
       - redis_password=${password}
