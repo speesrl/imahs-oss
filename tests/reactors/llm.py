@@ -14,7 +14,7 @@ if __name__ == "__main__":
         ]
     )
     for handler in logging.getLogger().handlers:
-        handler.setFormatter(ExceptionFormatter("%(levelname)s: %(message)s"))
+        handler.setFormatter(ExceptionFormatter("%(asctime)s - %(name)s - %(levelname)s - %(filename)s:%(lineno)d - %(message)s"))
     lm = Ollama(
         redis_host=os.environ.get('redis_host'),
         redis_client=os.environ.get('redis_client'),

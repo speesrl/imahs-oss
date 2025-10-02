@@ -31,7 +31,7 @@ class EventDrivingActor:
         self.redis.lpush(self.redis_channel_requests, json.dumps({'function': self.function, 'euuid': self.euuid, 'replyto': self.redis_channel_replies, 'args': {**self.args}}))
         while True:
             await asyncio.sleep(self.sleep)
-            data = self.redis.rpop(self.redis_channel_replies)
+            data = self.redis.lpop(self.redis_channel_replies)
             logging.info(f"actor loop, data: {data}")
             if data is not None:
                 try:
@@ -56,9 +56,9 @@ class Serializer:
         raise Exception(f"no serializer found for {type(obj)}")
 
 class EventDrivenReactor:
-    def __init__(self, *, redis_host, redis_client, redis_password, redis_channel_requests: str, sleep: float = 0.1, **kwargs):
+    def __init__(self, *, redis_host, redis_client, redis_password, redis_channel_requests: str, sleep: float = 0.001, **kwargs):
         self.redis_channel_requests = redis_channel_requests
-        self.sleep = max(sleep, 0.1)
+        self.sleep = max(sleep, 0.001)
 
         self.redis = mop.clients.Redis(
                 host=redis_host, 
@@ -132,31 +132,34 @@ class EventDrivenReactor:
         while True:
             await asyncio.sleep(self.sleep)
             try:
-                raw = self.redis.lpop(self.redis_channel_requests)
-                logging.info(f"reactor loop, data: {raw}")
-                if raw is None:
-                    continue
-                if isinstance(raw, (bytes, bytearray)):
-                    raw = raw.decode()
-                try:
-                    data = json.loads(raw)
-                except Exception:
-                    logging.exception("Invalid JSON from redis: %r", raw)
-                    continue
-                function = data.get("function")
-                args = data.get("args") or {}
-                replyto = data.get("replyto")
-                euuid = data.get("euuid")
-                if function is None or replyto is None or euuid is None:
-                    logging.warning("Missing 'function' or 'replyto' in request: %s", data)
-                    continue
-                if not isinstance(function, str) or not isinstance(args, dict):
-                    logging.warning("Bad types for 'function' or 'args': %s", data)
-                    continue
-                if not hasattr(self, function) or not callable(getattr(self, function)):
-                    logging.warning("Unknown or non-callable function requested: %s", function)
-                    continue
-                asyncio.create_task(self.__run__(function, replyto, euuid, **args))
+                for channel in self.redis.scan_iter(f"{self.redis_channel_requests}:*"):
+                    channel = channel.decode() if isinstance(channel, bytes) else channel
+                    raw = self.redis.lpop(channel)
+                    logging.info(f"reactor loop, data: {raw}")
+                    if raw is None:
+                        continue
+                    if isinstance(raw, (bytes, bytearray)):
+                        raw = raw.decode()
+                    try:
+                        data = json.loads(raw)
+                    except Exception:
+                        logging.exception("Invalid JSON from redis: %r", raw)
+                        continue
+                    function = data.get("function")
+                    args = data.get("args") or {}
+                    replyto = data.get("replyto")
+                    euuid = data.get("euuid")
+                    logging.info(f"should reply to {replyto}")
+                    if function is None or replyto is None or euuid is None:
+                        logging.warning("Missing 'function' or 'replyto' in request: %s", data)
+                        continue
+                    if not isinstance(function, str) or not isinstance(args, dict):
+                        logging.warning("Bad types for 'function' or 'args': %s", data)
+                        continue
+                    if not hasattr(self, function) or not callable(getattr(self, function)):
+                        logging.warning("Unknown or non-callable function requested: %s", function)
+                        continue
+                    asyncio.create_task(self.__run__(function, replyto, euuid, **args))
             except asyncio.CancelledError:
                 logging.exception("Cancelled EventDrivenReactor loop")
             except Exception:
