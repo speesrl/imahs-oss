@@ -76,17 +76,17 @@ services:
   python:
     pull_policy: missing
     image: python:3.13
-  marker:
+  markerpdf:
     profiles: ["donotstart"]
     depends_on:
       - python
     pull_policy: never
     restart: always
-    container_name: marker
-    image: marker
+    container_name: markerpdf
+    image: markerpdf
     build: 
       context: .
-      dockerfile: dockerfile.marker
+      dockerfile: dockerfile.markerpdf
     ports:
       - "8192:8192"
     volumes:
@@ -99,3 +99,4 @@ services:
           devices:
             - driver: nvidia
               capabilities: [gpu]
+              

@@ -26,7 +26,51 @@ def ping(url, timeout=5.0):
             print(e)
             return False
 
-class Marker:
+class LibreTranslate:
+    def __init__(
+        self,
+        *,
+        url: str
+    ):
+        try:
+            import httpx
+        except ImportError:
+            raise ValueError(
+                "The httpx python package is not installed. Please install it with `pip install httpx`"
+            )
+        self.url = url
+        self._session = httpx.Client(timeout=300)
+    def __call__(
+            self, 
+            text,
+            tgt=None,
+            src=None
+        ):
+        if src is None:
+            src = self._session.post(
+                f"{self.url}/detect",
+                data={
+                    "q": text
+                }
+            ).json()
+            if tgt is None:
+                return src
+        if not src:
+            return None
+        translated = self._session.post(
+            f"{self.url}/translate",
+            data={
+                "q": text,
+                "source": src[0].get('language'),
+                "target": tgt,
+                "format": "text",
+                "alternatives": 3,
+            }
+        ).json()
+        return translated
+        
+
+class MarkerPDF:
     def __init__(
         self,
         *,
@@ -43,7 +87,7 @@ class Marker:
     def __call__(
             self, 
             file: FileUpload
-        ) -> Embeddings:
+        ):
         response = self._session.post(
             f"{self.url}/marker/upload",
             data={

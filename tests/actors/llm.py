@@ -5,47 +5,14 @@ import logging
 import argparse
 import ollama
 import time
+import json
 from mop.core import EventDrivingActor
 from mop.utils import ExceptionFormatter
-from pyprofyler import PyProfyler
+from mop.benchmarks import profileit
 
 uid = uuid.uuid4().hex 
 
-@PyProfyler
-async def ollama_test(client: ollama.Client, repeat, timeout):
-    r = client.list()
-    while True:
-        await asyncio.sleep(.1)
-        yield r
-        if repeat:
-            if not any(isinstance(repeat, cls) for cls in [bool, int]):
-                continue
-            r = client.list()
-            if isinstance(repeat, int):
-                repeat -= 1
-                t = time.time()
-        elif timeout:
-            if time.time()-t > timeout:
-                break 
-    yield r
 
-@PyProfyler
-async def actor_test(actor: EventDrivingActor):
-    async for x in actor(repeat=10, timeout=1):
-        await asyncio.sleep(0.00000000001)
-        yield x
-
-async def main(actor: EventDrivingActor, client: ollama.Client):
-    async for v in actor_test(actor):
-        await asyncio.sleep(0.00000000001)
-        logging.info(v)
-    logging.info(str(actor_test))
-    async for v in ollama_test(client, repeat=10, timeout=1):
-        await asyncio.sleep(0.00000000001)
-        logging.info(v)
-    logging.info(str(ollama_test))
-    while True:
-        await asyncio.sleep(1)
     
 if __name__ == "__main__":
     logging.basicConfig(
@@ -55,7 +22,7 @@ if __name__ == "__main__":
         ]
     )
     for handler in logging.getLogger().handlers:
-        handler.setFormatter(ExceptionFormatter("%(asctime)s - %(name)s - %(levelname)s - %(filename)s:%(lineno)d - %(message)s"))
+        handler.setFormatter(ExceptionFormatter("%(message)s"))
     agp  = argparse.ArgumentParser()
     agp.add_argument('--redis_host',     required=False, type=str)
     agp.add_argument('--redis_password', required=False, type=str)
@@ -76,4 +43,4 @@ if __name__ == "__main__":
         host=os.environ.get('ollama_host')
     )
 
-    asyncio.run(main(actor, client))
+    asyncio.run(profileit('ollama', 100, actor, client.list))

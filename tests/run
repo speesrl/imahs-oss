@@ -36,5 +36,5 @@ password=$PASSWORD HOST_IP=$(hostname -I | awk '{print $1}') docker compose -f $
 
 password=$PASSWORD HOST_IP=$(hostname -I | awk '{print $1}') docker compose -f $SCRIPT_PATH/reactors/docker-compose.yml logs -f &
 password=$PASSWORD HOST_IP=$(hostname -I | awk '{print $1}') docker compose -f $SCRIPT_PATH/actors/docker-compose.yml logs -f &
-password=$PASSWORD docker compose -f servers/docker-compose.yml logs -f &
+password=$PASSWORD docker compose -f $SCRIPT_PATH/servers/docker-compose.yml logs -f &
 wait
