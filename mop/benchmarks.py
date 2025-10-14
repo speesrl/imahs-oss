@@ -3,8 +3,7 @@ import time
 import json
 import logging 
 import asyncio
-from mop.core import EventDrivingActor
-from mop.utils import ExceptionFormatter
+from mop.core import EventDrivingActor, Serializer
 from pyprofyler import PyProfyler
 
 
@@ -33,15 +32,22 @@ async def actor_test(repeat, timeout, actor: EventDrivingActor):
         yield x
 
 async def profileit(name, repeat, actor: EventDrivingActor, func, *args, **kwargs):
+    serializer = Serializer()
+    actor_yields = []
     async for v in actor_test(repeat=repeat, timeout=1, actor=actor):
         await asyncio.sleep(1e-9)
-        continue
+        actor_yields+=[v]
+    func_yields = []
     async for v in func_test(repeat=repeat, timeout=1, sleep_for=actor.sleep, func=func, *args, **kwargs):
         await asyncio.sleep(1e-9)
-        continue
+        func_yields+=[serializer(v)]
     result = dict()
     result['actor'] = json.loads(str(actor_test))
+    result['actor']['yields'] = actor_yields
     result['client'] = json.loads(str(func_test))
+    result['client']['yields'] = func_yields
+    result['repeated'] = repeat
+    result['func'] = actor.function
     logging.info(result)
     with open(f'./files/{name}_test_{os.environ.get("SUPERVISOR_PROCESS_NUM")}.json', 'w') as f:
         json.dump(result, f, indent=4)

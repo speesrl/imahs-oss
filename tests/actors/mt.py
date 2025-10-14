@@ -3,9 +3,9 @@ import uuid
 import asyncio
 import logging
 import argparse
-import ollama
 import time
 import json
+from mop.clients import LibreTranslate
 from mop.core import EventDrivingActor
 from mop.utils import ExceptionFormatter
 from mop.benchmarks import profileit
@@ -33,14 +33,14 @@ if __name__ == "__main__":
         redis_host=os.environ.get('redis_host', args.redis_host),
         redis_client=os.environ.get('redis_client'),
         redis_password=os.environ.get('redis_password', args.redis_password),
-        redis_channel_requests=f"{os.environ.get('redis_channel_requests')}:llm:{uid}",
+        redis_channel_requests=f"{os.environ.get('redis_channel_requests')}:mt:{uid}",
         redis_channel_replies=f"{os.environ.get('redis_channel_replies')}:{uid}",
-        function="list",
-        args={}
+        function="run",
+        args={'text': 'ciao come stai?', 'src': 'it', 'tgt': 'en'}
     )
 
-    client = ollama.Client(
-        host=os.environ.get('ollama_host')
+    client = LibreTranslate(
+        url=os.environ.get('libretranslate_host')
     )
 
-    asyncio.run(profileit('ollama', 100, actor, client.list))
+    asyncio.run(profileit('libretranslate', 100, actor, lambda: client(text='ciao come stai?', src='it', tgt='en')))

@@ -99,4 +99,27 @@ services:
           devices:
             - driver: nvidia
               capabilities: [gpu]
+  libretranslate:
+    profiles: ["start"]
+    depends_on:
+      - python
+    pull_policy: never
+    restart: always
+    container_name: libretranslate
+    image: libretranslate
+    build: 
+      context: .
+      dockerfile: dockerfile.libretranslate
+    ports:
+      - "8193:8193"
+    volumes:
+      - ./files/cache/libretranslate:/.local/share/argos-translate/packages
+    runtime: nvidia
+    deploy:
+      mode: global
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              capabilities: [gpu]
               

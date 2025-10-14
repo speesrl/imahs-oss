@@ -1,5 +1,3 @@
-import uuid
-import yaml
 import hashlib
 import redis
 import logging
@@ -53,6 +51,7 @@ class LibreTranslate:
                     "q": text
                 }
             ).json()
+            src = src[0].get('language')
             if tgt is None:
                 return src
         if not src:
@@ -61,7 +60,7 @@ class LibreTranslate:
             f"{self.url}/translate",
             data={
                 "q": text,
-                "source": src[0].get('language'),
+                "source": src,
                 "target": tgt,
                 "format": "text",
                 "alternatives": 3,

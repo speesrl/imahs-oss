@@ -60,8 +60,12 @@ class Serializer:
     def __init__(self):
         pass
     def __call__(self, obj):
+        if isinstance(obj, str):
+            return obj
         if isinstance(obj, ollama.ListResponse):
             return obj.model_dump_json()
+        if isinstance(obj, dict):
+            return json.dumps(obj, indent=4)
         raise Exception(f"no serializer found for {type(obj)}")
 
 class EventDrivenReactor:
@@ -183,3 +187,25 @@ class Ollama(EventDrivenReactor, ollama.Client):
             sleep=sleep
         )
         ollama.Client.__init__(self, host=host, **kwargs)
+
+class LibreTranslate(EventDrivenReactor, mop.clients.LibreTranslate):
+    def __init__(self, *, redis_host, redis_client, redis_password, redis_channel_requests: str, sleep: float = 0.1, url : str = 'http://localhost:8193'):
+        EventDrivenReactor.__init__(
+            self,
+            redis_host=redis_host, 
+            redis_client=redis_client, 
+            redis_password=redis_password, 
+            redis_channel_requests=redis_channel_requests, 
+            sleep=sleep
+        )
+        logging.info(f"libretranslate url is: {url}")
+        mop.clients.LibreTranslate.__init__(self, url=url)
+    async def run(
+            self, 
+            text,
+            tgt=None,
+            src=None):
+        return self(
+            text,
+            tgt,
+            src)
