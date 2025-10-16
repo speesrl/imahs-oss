@@ -11,7 +11,10 @@ import inspect
 import datetime
 import functools
 import time
+import chromadb
 import mop.clients
+from   mop.utils import FileUpload
+from typing import Optional, Dict
 
 class EventDrivingActor:
     def __init__(self, *, redis_host, redis_client, redis_password, redis_channel_requests, redis_channel_replies, function, args, sleep=.1):
@@ -209,3 +212,64 @@ class LibreTranslate(EventDrivenReactor, mop.clients.LibreTranslate):
             text,
             tgt,
             src)
+    
+
+class ChromaDBHTTPClient(EventDrivenReactor, chromadb.ClientCreator):
+    def __init__(
+            self, *, redis_host, redis_client, redis_password, redis_channel_requests: str, sleep: float = 0.1, 
+            host: str = "localhost",
+            port: int = 8000,
+            ssl: bool = False,
+            headers: Optional[Dict[str, str]] = None,
+            settings: Optional[chromadb.Settings] = None,
+            tenant: str = chromadb.DEFAULT_TENANT,
+            database: str = chromadb.DEFAULT_DATABASE,
+        ):
+        EventDrivenReactor.__init__(
+            self,
+            redis_host=redis_host, 
+            redis_client=redis_client, 
+            redis_password=redis_password, 
+            redis_channel_requests=redis_channel_requests, 
+            sleep=sleep
+        )
+        if settings is None:
+            settings = chromadb.Settings()
+        # Make sure parameters are the correct types -- users can pass anything.
+        host = str(host)
+        port = int(port)
+        ssl = bool(ssl)
+        tenant = str(tenant)
+        database = str(database)
+
+        settings.chroma_api_impl = "chromadb.api.fastapi.FastAPI"
+        if settings.chroma_server_host and settings.chroma_server_host != host:
+            raise ValueError(
+                f"Chroma server host provided in settings[{settings.chroma_server_host}] is different to the one provided in HttpClient: [{host}]"
+            )
+        settings.chroma_server_host = host
+        if settings.chroma_server_http_port and settings.chroma_server_http_port != port:
+            raise ValueError(
+                f"Chroma server http port provided in settings[{settings.chroma_server_http_port}] is different to the one provided in HttpClient: [{port}]"
+            )
+        settings.chroma_server_http_port = port
+        settings.chroma_server_ssl_enabled = ssl
+        settings.chroma_server_headers = headers
+        chromadb.ClientCreator.__init__(self, tenant=tenant, database=database, settings=settings)
+    
+class MarkerPDF(EventDrivenReactor, mop.clients.MarkerPDF):
+    def __init__(self, *, redis_host, redis_client, redis_password, redis_channel_requests: str, sleep: float = 0.1, url : str = 'http://localhost:8193'):
+        EventDrivenReactor.__init__(
+            self,
+            redis_host=redis_host, 
+            redis_client=redis_client, 
+            redis_password=redis_password, 
+            redis_channel_requests=redis_channel_requests, 
+            sleep=sleep
+        )
+        logging.info(f"libretranslate url is: {url}")
+        mop.clients.MarkerPDF.__init__(self, url=url)
+    async def run(
+            self, 
+            file: FileUpload):
+        return self(file)

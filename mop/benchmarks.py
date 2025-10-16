@@ -31,15 +31,15 @@ async def actor_test(repeat, timeout, actor: EventDrivingActor):
         await asyncio.sleep(actor.sleep/10)
         yield x
 
-async def profileit(name, repeat, actor: EventDrivingActor, func, *args, **kwargs):
+async def profileit(name, uid, repeat, actor: EventDrivingActor, func, *args, **kwargs):
     serializer = Serializer()
     actor_yields = []
-    async for v in actor_test(repeat=repeat, timeout=1, actor=actor):
-        await asyncio.sleep(1e-9)
+    async for v in actor_test(repeat=repeat, timeout=10, actor=actor):
+        await asyncio.sleep(actor.sleep/10)
         actor_yields+=[v]
     func_yields = []
-    async for v in func_test(repeat=repeat, timeout=1, sleep_for=actor.sleep, func=func, *args, **kwargs):
-        await asyncio.sleep(1e-9)
+    async for v in func_test(repeat=repeat, timeout=10, sleep_for=actor.sleep, func=func, *args, **kwargs):
+        await asyncio.sleep(actor.sleep/10)
         func_yields+=[serializer(v)]
     result = dict()
     result['actor'] = json.loads(str(actor_test))
@@ -48,6 +48,7 @@ async def profileit(name, repeat, actor: EventDrivingActor, func, *args, **kwarg
     result['client']['yields'] = func_yields
     result['repeated'] = repeat
     result['func'] = actor.function
+    result['uid'] = uid
     logging.info(result)
     with open(f'./files/{name}_test_{os.environ.get("SUPERVISOR_PROCESS_NUM")}.json', 'w') as f:
         json.dump(result, f, indent=4)

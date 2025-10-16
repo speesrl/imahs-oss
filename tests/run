@@ -27,6 +27,8 @@ echo $SCRIPT_PATH
 password=$PASSWORD docker compose -f $SCRIPT_PATH/servers/docker-compose.yml down --remove-orphans
 password=$PASSWORD docker compose -f $SCRIPT_PATH/servers/docker-compose.yml --profile start up  -d --build --force-recreate
 
+sleep 10
+
 password=$PASSWORD HOST_IP=$(hostname -I | awk '{print $1}') docker compose -f $SCRIPT_PATH/reactors/docker-compose.yml down --remove-orphans
 password=$PASSWORD HOST_IP=$(hostname -I | awk '{print $1}') docker compose -f $SCRIPT_PATH/reactors/docker-compose.yml up   -d --build --force-recreate
 

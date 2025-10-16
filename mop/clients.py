@@ -15,13 +15,13 @@ def ping(url, timeout=5.0):
     with httpx.Client(timeout=timeout) as client:
         try:
             response = client.head(url)
+            if response.status_code==405:
+                response = client.get(url)
             if response.status_code < 400:
                 return True
             else:
-                print(response.status_code)
                 return False
         except httpx.RequestError as e:
-            print(e)
             return False
 
 class LibreTranslate:
