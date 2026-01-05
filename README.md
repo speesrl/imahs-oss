@@ -4,7 +4,7 @@ an Event-Driven Reactive Architecture (EDA) with an Actor/Reactor Model for Scal
 
 ## Installation
 ```sh
-pip install https://github.com/speesrl/imahs-oss
+pip install git+https://github.com/speesrl/imahs-oss
 ```
 
 ## Usage
