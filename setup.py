@@ -4,10 +4,10 @@ with open("requirements.txt") as f:
     requirements = f.read().splitlines()
 
 with open("README.md") as f:
-    long_description = f.read().splitlines()
+    long_description = f.read()
 
 with open("LICENSE") as f:
-    license = f.read().splitlines()
+    license = f.read()
 
 setup(
     name="mop",
