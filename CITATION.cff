@@ -7,10 +7,10 @@ type: software
 authors:
   - given-names: Aly
     family-names: Shmahell
-    affiliation: SPEE SRL, Università degli Studi dell'Aquila
+    affiliation: SPEE S.R.L, Università degli Studi dell'Aquila
     orcid: 'https://orcid.org/0000-0002-4325-2289'
 repository-code: 'https://github.com/speesrl/imahs-oss'
-url: 'https:spee.it'
-license: 
-version: 
-date-released: ''
+url: 'https://spee.it'
+license: BSD 3-Clause License
+version: 1.0
+date-released: 07-01-2026
