@@ -1,0 +1,13 @@
+FROM python:3.13 As deps
+ENV PYTHONDONTWRITEBYTECODE=1
+RUN apt update && apt install -y --no-install-recommends supervisor python3-magic && apt clean
+
+COPY      ./mop/          /tmp/mop/mop/
+COPY      ./requirements.txt         /tmp/mop/requirements.txt
+COPY      ./setup.py        /tmp/mop/setup.py  
+RUN pip install           /tmp/mop/
+
+FROM deps
+WORKDIR                    /workspace
+COPY      ./tests/actors/  /workspace/
+CMD ["supervisord", "-c", "/workspace/supervisord.conf"]

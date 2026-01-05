@@ -1,0 +1,16 @@
+#!/bin/bash
+
+PASSWORD="none"
+
+SCRIPT_PATH="$(cd "$(dirname "$0")" && pwd)"
+
+echo $SCRIPT_PATH
+
+password=$PASSWORD docker compose -f $SCRIPT_PATH/servers/docker-compose.yml down --remove-orphans
+
+password=$PASSWORD docker compose -f $SCRIPT_PATH/actors/docker-compose.yml down --remove-orphans
+password=$PASSWORD docker compose -f $SCRIPT_PATH/reactors/docker-compose.yml down --remove-orphans
+
+docker system prune -f 
+docker container prune -f 
+docker image prune -f 

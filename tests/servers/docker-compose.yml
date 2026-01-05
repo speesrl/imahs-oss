@@ -1,0 +1,125 @@
+services:
+  ollama:
+    profiles: ["start"]
+    pull_policy: if_not_present
+    ports:
+      - "11434:11434"
+    environment:
+      - OLLAMA_BIND=0.0.0.0
+      - OLLAMA_HOST=0.0.0.0
+      - PUID=${PUID:-1000}
+      - PGID=${PGID:-1000}
+      - OLLAMA_KEEP_ALIVE=-1
+      - ENABLE_IMAGE_GENERATION=True
+      - CUDA_VISIBLE_DEVICES=0 
+    restart: always
+    container_name: ollama
+    image: ollama/ollama:0.9.0
+    volumes:
+      - ./files/ollama:/root/.ollama
+    runtime: nvidia
+    deploy:
+      mode: global
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              capabilities: [gpu]
+  redis:
+    cpus: 8.0
+    mem_limit: 4096m
+    restart: always
+    pull_policy: if_not_present
+    image: redis:8.2
+    container_name: redis
+    profiles: ["start"]
+    command: >
+      redis-server
+      --bind 0.0.0.0
+      --protected-mode no
+      --requirepass ${password}
+      --save 900 1
+      --save 300 10
+      --save 60 10000
+      --appendonly yes
+    volumes:
+      - ./files/redis:/data
+    ports:
+      - "6379:6379"
+  infinity:
+    profiles: ["start"]
+    pull_policy: if_not_present
+    ports:
+      - "7997:7997"
+    container_name: infinity
+    image: michaelf34/infinity:0.0.76
+    volumes:
+      - ./files/infinity:/app/.cache
+    runtime: nvidia
+    deploy:
+      mode: global
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              capabilities: [gpu]
+    environment:
+      - INFINITY_ANONYMOUS_USAGE_STATS="0"
+    command:
+      - v2
+      - --model-id
+      - "intfloat/multilingual-e5-large-instruct"
+      - --model-id
+      - "cross-encoder/mmarco-mMiniLMv2-L12-H384-v1"
+
+  # python:3.13
+  python:
+    pull_policy: missing
+    image: python:3.13
+  markerpdf:
+    profiles: ["donotstart"]
+    depends_on:
+      - python
+    pull_policy: never
+    restart: always
+    container_name: markerpdf
+    image: markerpdf
+    build: 
+      context: .
+      dockerfile: dockerfile.markerpdf
+    ports:
+      - "8192:8192"
+    volumes:
+      - ./files/cache/datalab:/root/.cache/datalab
+    runtime: nvidia
+    deploy:
+      mode: global
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              capabilities: [gpu]
+  libretranslate:
+    profiles: ["start"]
+    depends_on:
+      - python
+    pull_policy: never
+    restart: always
+    container_name: libretranslate
+    image: libretranslate
+    build: 
+      context: .
+      dockerfile: dockerfile.libretranslate
+    ports:
+      - "8193:8193"
+    volumes:
+      - ./files/cache/libretranslate:/.local/share/argos-translate/packages
+    runtime: nvidia
+    deploy:
+      mode: global
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              capabilities: [gpu]
+              

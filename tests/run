@@ -1,0 +1,42 @@
+#!/bin/bash
+
+PASSWORD=""
+
+while [[ "$#" -gt 0 ]]; do
+    case $1 in
+        --password) PASSWORD="$2"; shift ;;
+        *) echo "Unknown parameter passed: $1"; exit 1 ;;
+    esac
+    shift
+done
+
+echo "PASSWORD: $PASSWORD"
+
+if ! command -v docker &> /dev/null; then
+  echo "install docker engine following the instructions at https://docs.docker.com/engine/install/"
+  exit 1
+fi
+
+docker system prune -f 
+docker container prune -f 
+docker image prune -f 
+SCRIPT_PATH="$(cd "$(dirname "$0")" && pwd)"
+
+echo $SCRIPT_PATH
+
+password=$PASSWORD docker compose -f $SCRIPT_PATH/servers/docker-compose.yml down --remove-orphans
+password=$PASSWORD docker compose -f $SCRIPT_PATH/servers/docker-compose.yml --profile start up  -d --build --force-recreate
+
+sleep 10
+
+password=$PASSWORD HOST_IP=$(hostname -I | awk '{print $1}') docker compose -f $SCRIPT_PATH/reactors/docker-compose.yml down --remove-orphans
+password=$PASSWORD HOST_IP=$(hostname -I | awk '{print $1}') docker compose -f $SCRIPT_PATH/reactors/docker-compose.yml up   -d --build --force-recreate
+
+password=$PASSWORD HOST_IP=$(hostname -I | awk '{print $1}') docker compose -f $SCRIPT_PATH/actors/docker-compose.yml down --remove-orphans
+password=$PASSWORD HOST_IP=$(hostname -I | awk '{print $1}') docker compose -f $SCRIPT_PATH/actors/docker-compose.yml up   -d --build --force-recreate
+
+
+password=$PASSWORD HOST_IP=$(hostname -I | awk '{print $1}') docker compose -f $SCRIPT_PATH/reactors/docker-compose.yml logs -f &
+password=$PASSWORD HOST_IP=$(hostname -I | awk '{print $1}') docker compose -f $SCRIPT_PATH/actors/docker-compose.yml logs -f &
+password=$PASSWORD docker compose -f $SCRIPT_PATH/servers/docker-compose.yml logs -f &
+wait

@@ -1,0 +1,28 @@
+services:
+  # python:3.13
+  python:
+    pull_policy: missing
+    image: python:3.13
+  # mop-reactors
+  mop-reactors:
+    depends_on:
+      - python
+    pull_policy: never
+    restart: always
+    container_name: mop-reactors
+    image: mop-reactors
+    build: 
+      context: ../..
+      dockerfile: tests/reactors/dockerfile
+    environment:
+      - ollama_host=${HOST_IP}:11434
+      - libretranslate_host=http://${HOST_IP}:8193
+      - redis_host=${HOST_IP}
+      - redis_client=client
+      - redis_password=${password}
+      - redis_channel_requests=mop:requests
+    volumes:
+      - ./files:/workspace/files
+networks:
+  mop-reactors:
+    driver: bridge
