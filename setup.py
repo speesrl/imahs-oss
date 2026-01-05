@@ -6,6 +6,10 @@ with open("requirements.txt") as f:
 with open("README.md") as f:
     long_description = f.read()
 
+with open("NOTICE") as f:
+    long_description += "\nNOTICE:\n"
+    long_description += f.read()
+
 with open("LICENSE") as f:
     license = f.read()
 
@@ -20,4 +24,5 @@ setup(
     packages=find_packages(),
     install_requires=requirements,
     python_requires='>=3.12.9',
+    url="https://github.com/speesrl/imahs-oss"
 )
