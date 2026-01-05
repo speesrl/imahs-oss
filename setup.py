@@ -15,7 +15,9 @@ setup(
     author="Aly Shmahell",
     description="an Event-Driven Reactive Architecture (EDA) with an Actor/Reactor Model for Scalable Context Exchange in Large Model Applications.",
     long_description=long_description,
+    long_description_content_type='text/markdown',
     license=license,
     packages=find_packages(),
     install_requires=requirements,
+    python_requires='>=3.12.9',
 )
